@@ -1,0 +1,2309 @@
+<!doctype html>
+<html lang="fr">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Chut !</title>
+<!--
+=====================================================================================
+ CHUT ! — « Tabou biblique » · maquette de tous les écrans
+ Direction artistique : Léa (design), 20/11/2026. Téléphone d'abord, 360 à 430 px.
+ Troisième jeu de la famille, après « Loup dans la bergerie » et « Babel ».
+
+ LE NOM. « Chut ! » dit le principe en un mot : il y a des mots qu'on n'a pas le
+ droit de dire. Court comme Babel, il tient en cinq galets, se crie autour d'une
+ table et se comprend à tout âge. (Le nom « Schibboleth », proposé d'abord, a été
+ refusé par Élias le 20/11 : il renvoie à une tuerie entre tribus, Juges 12:6.)
+
+ PRINCIPE : même matière que les deux aînés (pièces de carton épais à lèvre pleine,
+ cartes crème, Bricolage Grotesque + Figtree), autre lumière : une rivière calme à
+ la nuit tombante, l'heure où l'on parle bas. Fond jade nuit, une seule couleur
+ d'action, le citron, et des galets crème pour le nom du jeu. Le point
+ d'exclamation est le galet citron : c'est le cri du buzz.
+ Le ROUGE n'appartient qu'à la faute : buzzer, bande des mots interdits, 5 dernières
+ secondes. Rien d'autre n'est rouge dans le jeu.
+ Couleur de la carte dans la bibliothèque : jade #2EC4A6.
+
+ ⛔ RÈGLE DE SECRET : la carte n'existe que chez qui fait deviner et chez les
+ adversaires. L'écran #ecran-tour-equipe n'a AUCUN emplacement de mot ni d'interdit,
+ même caché. Le mot n'apparaît chez l'équipe qu'APRÈS coup : dans #voile-buzz (carte
+ perdue) et dans la liste de fin de tour.
+ ⛔ Une couleur d'équipe est toujours accompagnée de son nom écrit (Équipe 1…).
+ ⛔ Aucun style d'état en ligne. Les seuls attributs style= de ce fichier sont des
+ DONNÉES : --e (couleur d'équipe), --j (couleur de joueur), --reste (part du chrono),
+ --part (barre de score), --i (rang dans une cascade).
+ ⛔ Textes neutres : jamais d'accord au genre de la personne (« Buzz sur votre carte »,
+ pas « vous avez été buzzé »). « Personnes » plutôt que « joueurs » dans les comptes.
+
+ BRANCHEMENT (moteur : logique.js, phases salle, pret, tour, finTour, fin) : chaque écran
+ est un <section class="ecran" id="ecran-NOM">. Afficher un écran = lui retirer `hidden`
+ et le mettre à tous les autres.
+   salle   → #ecran-attente
+   pret    → #ecran-pret        (classe role-* selon vue.role)
+   tour    → #ecran-tour-parleur | #ecran-tour-equipe | #ecran-tour-adverse (selon vue.role)
+   finTour → #ecran-fin-tour    (bilan du tour ET score : il n'y a pas de phase score)
+   fin     → #ecran-fin
+ Hors phases : #ecran-accueil, #ecran-entree, #ecran-regles, #ecran-erreur.
+ Calque commun : #voile-buzz, affiché tant que vue.tour.buzz n'est pas nul (1,5 s,
+ DUREE_BUZZ), et les bandeaux #bandeau-connexion, #toast-retard. Tous trois : enfants
+ directs de body.
+ Correspondances : « Ronde N sur M » = vue.ronde / vue.nbRondes ; compteurs du tour =
+ vue.tour.nbTrouvees / nbBuzzees ; bilan = vue.dernierTour ; points = vue.totaux
+ (trouvees + buzz = total) ; prochain = vue.prochain (nul en finTour = dernier tour).
+ Les <header class="legende maquette-seulement">, .intro-maquette et les boutons .demo
+ sont la maquette : à supprimer. La marge de maquette est nulle sous 600 px.
+ Équipe : style="--e:var(--e2)" sur l'élément qui porte data-equipe (e1 à e4).
+ Joueur : style="--j:var(--j3)" sur .pastille (couleur 1 à 10), initiale écrite dedans.
+
+ ---------------------------------------------------------------------------------
+ CLASSES D'ÉTAT (posées par le moteur)
+ ---------------------------------------------------------------------------------
+ #ecran-entree.mode-creer | .mode-rejoindre
+ #ecran-attente.est-hote        #reglages-hote, #btn-lancer, #btn-melanger ;
+                                sans elle : #attente-invite et #resume-reglages-invite
+ #ecran-attente.repartition-hasard | .repartition-choix   (comme Babel)
+ .equipe.est-mienne | .incomplete
+ .joueur.est-moi | .est-hote | .deconnecte | .vient-d-arriver (600 ms, puis retirer)
+ #equipes.melange               pendant le tirage (500 ms, puis retirer)
+ #btn-lancer[disabled] + #raison-lancer   pas-assez · sans-equipe · equipe-incomplete
+ .ecran.est-hote                sur #ecran-fin-tour et #ecran-fin : bouton .action-hote
+                                (Logique.suite / rejouer) ; sans elle, note .attente-invite
+ #ecran-pret.role-parleur | .role-equipe | .role-adverse
+ #ecran-pret.pilote-secours     qui fait deviner est hors ligne : l'hôte lance à sa place
+ #ecran-tour-parleur.gaucher    inverse Trouvé / Passer (interrupteur sur « On y va ? »)
+ .ecran.fin-proche              5 dernières secondes, sur les TROIS écrans de tour
+ .ecran.temps-ecoule            0 s, le temps de basculer en finTour (≤ 1 s)
+ .ecran.buzz-en-cours           tant que vue.tour.buzz existe, sur les TROIS écrans de tour :
+                                Trouvé, Passer et le buzzer sont [disabled] ; le chrono tourne
+ #voile-buzz.visible            le voile. Vue selon la personne :
+   #voile-buzz.vue-buzzeur      buzz.par === moi (« Bien vu ! »)
+   #voile-buzz.vue-parleur      tour.parleur === moi (« Buzz sur votre carte »)
+   #voile-buzz.vue-trop-tard    Logique.buzzer a répondu {refuse:true} à ce téléphone :
+                                garder cette classe jusqu'à la fermeture du voile
+   (aucune des trois : vue de tous les autres)
+   Si refuse:true arrive sans voile ouvert (buzz après la fin du temps) : rien à afficher,
+   seul le son buzz-refuse part.
+ .buzzer.enfonce                retour visuel immédiat au pointerdown (160 ms)
+ .carte-jeu.sort-trouve | .sort-passe | .sort-buzz | .entre   voir ANIMATIONS
+ .mot-carte.long (> 14 signes) | .tres-long (> 22 signes)       taille réduite
+ .interdits.longs (un interdit > 13 signes)                       taille réduite
+   → fonction tailler(el, carte) du script, à reprendre telle quelle
+ #ecran-fin-tour.aucune-trouvee  message dédié à la place des cartes trouvées
+ .groupe-cartes[hidden]          groupe vide (aucun buzz, aucune passe) : retiré
+ .puces-cartes : 12 puces au plus par groupe ; au-delà, une dernière puce
+                 <li class="plus-autres">+ N autres</li> (143 passées faisaient 2 300 px)
+ Buzzées : « Moïse <small>par Lydie</small> » (le prénom seul se lisait comme une carte)
+ Prochain : « PROCHAIN TOUR / Noah / fait deviner pour l'Équipe 2 » : jamais « Au tour d' »
+            devant un prénom (« Au tour d'Noah »)
+ #ecran-fin-tour.dernier-tour    vue.prochain nul : « C'était le dernier tour » (ou paquet
+                                 épuisé), bouton « Voir le podium » au lieu de « Tour suivant »
+ .ligne-score.en-tete           équipe en tête (couronne + « En tête » écrit)
+ #podium.n2 | .n3 | .n4         nombre d'équipes ; .hors-podium seulement à 4
+ #ecran-fin.ex-aequo            égalité en tête : « Égalité ! »
+ .carte-erreur[hidden]          une seule erreur visible à la fois
+ #bandeau-connexion.visible | #toast-retard.visible (4 s)
+
+ ---------------------------------------------------------------------------------
+ ANIMATIONS (transform et opacity uniquement ; coupées par prefers-reduced-motion)
+ ---------------------------------------------------------------------------------
+ a-apparait      entrée d'un écran (360 ms) : poser .entre sur la section
+ a-gue           galets du nom à l'accueil, posés un à un (--i)
+ a-flotte        photo de l'accueil (boucle lente)
+ a-entree-joueur un joueur rejoint la salle (.vient-d-arriver)
+ a-melange       tirage des équipes (#equipes.melange)
+ a-pouls-go      bouton Go (boucle tant qu'il n'est pas touché)
+ a-sort-trouve   carte qui monte et s'efface (220 ms) puis carte suivante + .entre
+ a-sort-passe    carte qui glisse à gauche (220 ms) puis carte suivante + .entre
+ a-sort-buzz     carte qui tremble puis tombe (300 ms), en même temps que le voile
+ a-entre-carte   nouvelle carte (200 ms)
+ a-pop           compteurs à chaque changement (.pop, 300 ms)
+ a-enfonce       buzzer pressé (.enfonce, 160 ms)
+ a-veille        anneau du buzzer qui respire, tant qu'il est actif (boucle 2,4 s)
+ a-voile         entrée du voile (240 ms) ; a-tampon-buzz : le disque BUZZ tombe (420 ms)
+ a-battement     chiffres du chrono (.fin-proche) ; a-halo : bord rouge (.fin-proche)
+ chrono          .chrono-reste : transform scaleX(var(--reste)), transition 100 ms linéaire
+                 (le moteur écrit --reste toutes les 100 ms)
+ a-monte         barres de score (cascade --i) ; a-podium : marches (cascade --i)
+ a-confettis     fin de partie, aux couleurs des équipes (2,4 s, une fois)
+ a-secousse      champ refusé, carte d'erreur (.secoue, 400 ms)
+ a-sautille      points d'attente ; a-tourne : icône de reconnexion
+ ⚠ Une suite d'animation part sur onfinish OU sur un minuteur de sa durée + 120 ms,
+   le premier des deux. La carte suivante est écrite dans le DOM avant .entre.
+ ⚠ Le voile dure 1,5 s quoi qu'il arrive à l'animation : minuteur, pas onfinish.
+
+ ---------------------------------------------------------------------------------
+ SONS (Milo, sons/*.mp3, validés par le Président) : quand les jouer
+ ---------------------------------------------------------------------------------
+ clic         tout bouton .btn au relâché (pointerup), volume bas ;
+              jamais Trouvé, Passer ni le buzzer
+ entree       une personne apparaît dans la salle (chez tous, sauf elle)
+ go           chez TOUS au passage pret → tour (départ du chrono)
+ trouve       chez TOUS, à chaque carte trouvée ; trouve-2, -3, -4 : à la suite
+              sans Passer ni buzz (série, plafonnée à -4)
+ passer       chez qui fait deviner seulement
+ buzzer       chez QUI FAIT DEVINER SEULEMENT, à l'arrivée de vue.tour.buzz (nouveau
+              buzz.n), synchrone avec l'ouverture du voile. Les autres voient le voile
+              sans le son.
+ buzz-refuse  chez la personne dont le buzz est refusé seulement ({refuse:true})
+ tic          chez tous, à 5, 4, 3, 2 et 1 s (avec .fin-proche)
+ fin-temps    chez tous, à 0 s (.temps-ecoule)
+ score        ouverture de #ecran-fin-tour
+ victoire     ouverture de #ecran-fin
+ Vibration (Android seulement) : Trouvé 30 ms ; Passer 15-40-15 ; buzzer 80 ms
+ chez qui buzze ; 60-40-60 chez qui fait deviner quand sa carte est buzzée
+ (il sait sans regarder qu'une carte vient de tomber).
+
+ ---------------------------------------------------------------------------------
+ PIRE CAS (360 × 640, boutons du pouce visibles sans défiler)
+ ---------------------------------------------------------------------------------
+ MESURÉ le 20/11 sur les 150 cartes définitives (cartes.json corrigé par Élias), dans le
+ jeu assemblé, à 360 × 640, « Dernières secondes » et « dernière carte » allumées, avec
+ tailler() ci-dessous : aucune carte ne dépasse ; 14 px libres sous Trouvé et sous le
+ buzzer ; carte la plus haute 268 px (« Joseph (fils de Jacob) ») ; buzzer ≥ 262 px ;
+ aucun mot coupé au milieu. Mot le plus long de la banque : 41 signes avec sa précision
+ entre parenthèses, que tailler() passe en petit sous le mot.
+ Le bouton démo « pire cas » charge cartes.json s'il est servi à côté de la page,
+ sinon prend le pire cas synthétique du contrat, et mesure les DEUX écrans de carte
+ (window.mesurerPireCas(cartes) renvoie la carte la plus haute et le bord libre sous
+ Trouvé / Passer et sous le buzzer). À relancer quand la banque arrive.
+=====================================================================================
+-->
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,600;12..96,700;12..96,800&family=Figtree:wght@500;600;700&display=swap" rel="stylesheet">
+<style>
+:root{
+  color-scheme:dark;
+  /* Jade nuit : une rivière calme au crépuscule */
+  --fond:#0B2426;
+  --fond-haut:#15474A;
+  --panneau:#113638;
+  --panneau-clair:#1A4B4C;
+  --panneau-levre:#051617;
+  --filet:#2D6663;
+  --texte:#FBF3E6;
+  --texte-doux:#C4DEDA;
+  --texte-faible:#A3C7C2;
+  /* Cartes et galets crème */
+  --carte:#FFF4E2;
+  --carte-levre:#D4BC97;
+  --encre:#13201F;
+  --encre-douce:#475956;
+  /* Action : le citron (la seule couleur qui appelle le geste) */
+  --action:#F2E14C;
+  --action-levre:#958611;
+  --sur-action:#13201F;
+  --jade:#2EC4A6;            /* couleur du jeu dans la bibliothèque */
+  --focus:#FFF4E2;
+  /* La faute : buzzer et mots interdits (le seul rouge du jeu) */
+  --buzz:#FF4F4F;
+  --buzz-levre:#9E1F2A;
+  --buzz-anneau:rgba(255,79,79,.22);
+  --interdit-fond:#FBE1D9;   /* bande des interdits, dans la carte */
+  --interdit-filet:#F1BDAF;
+  --interdit-texte:#A1202C;  /* « Interdit » sur la bande : 6,1:1 */
+  /* Tour */
+  --trouve:#3DD68C;
+  --trouve-levre:#1C8A55;
+  --urgence:#FF5A5F;
+  --urgence-texte:#FF8A8D;   /* rouge écrit sur fond jade (7,1:1) */
+  --alerte:#FFC93C;
+  /* Équipes (encre dessus ≥ 7:1), toujours avec leur nom */
+  --e1:#FF8FB1; --e2:#5BC8F5; --e3:#C3A6FF; --e4:#FFB46B;
+  /* Joueurs (mêmes jetons que Loup et Babel) */
+  --j1:#FF8A3D; --j2:#FFC93C; --j3:#3DBE8B; --j4:#4FB3E8; --j5:#9D8CF5;
+  --j6:#F06BB0; --j7:#EE6A5C; --j8:#2EC4B6; --j9:#D19A66; --j10:#A3D65C;
+  /* Matière */
+  --rayon:24px; --rayon-m:18px; --rayon-s:12px;
+  --ombre:0 12px 28px rgba(2,10,10,.5);
+  --reflet:inset 0 2px 0 rgba(255,255,255,.32);
+  --police-titre:'Bricolage Grotesque','Segoe UI Variable Display','Segoe UI',system-ui,-apple-system,Roboto,Arial,sans-serif;
+  --police:'Figtree','Segoe UI',system-ui,-apple-system,Roboto,Helvetica,Arial,sans-serif;
+  /* Mouvement */
+  --rapide:140ms; --moyen:320ms;
+  --ressort:cubic-bezier(.34,1.56,.64,1);
+  --doux:cubic-bezier(.22,.8,.3,1);
+}
+*,*::before,*::after{box-sizing:border-box}
+html{-webkit-text-size-adjust:100%}
+body{
+  margin:0;background:var(--fond);color:var(--texte);
+  font:500 1rem/1.45 var(--police);
+  padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px);
+  -webkit-tap-highlight-color:transparent;
+}
+[hidden]{display:none!important}
+button,input{font:inherit;color:inherit}
+button{cursor:pointer}
+:focus-visible{outline:3px solid var(--focus);outline-offset:3px;border-radius:10px}
+.vh{position:absolute!important;width:1px;height:1px;overflow:hidden;clip:rect(0 0 0 0);white-space:nowrap}
+
+/* Grain de carton */
+body::before{
+  content:"";position:fixed;inset:0;pointer-events:none;z-index:50;opacity:.06;
+  background-image:url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='160' height='160'><filter id='g'><feTurbulence type='fractalNoise' baseFrequency='.85' numOctaves='2' stitchTiles='stitch'/><feColorMatrix values='0 0 0 0 1  0 0 0 0 1  0 0 0 0 1  0 0 0 .9 0'/></filter><rect width='100%' height='100%' filter='url(%23g)'/></svg>");
+}
+
+/* ---------- Maquette ---------- */
+/* Leçon de Babel : au téléphone, aucune marge autour de l'écran. Elle revient au-delà de 600 px. */
+.maquette{max-width:430px;margin:0 auto;padding-block:0}
+@media (min-width:600px){.maquette{padding-block:8px 48px}}
+.legende{
+  display:flex;align-items:center;gap:8px;flex-wrap:wrap;
+  padding:28px max(16px,env(safe-area-inset-right,0px)) 10px max(16px,env(safe-area-inset-left,0px));
+  font:700 .875rem/1.2 var(--police);color:var(--texte-doux)
+}
+.legende .num{display:inline-grid;place-items:center;min-width:28px;height:28px;padding:0 6px;border-radius:999px;background:var(--panneau-clair);color:var(--texte);font-family:var(--police-titre)}
+.legende .demos{margin-left:auto;display:flex;gap:6px;flex-wrap:wrap}
+.legende .demo{border:1px solid var(--filet);background:transparent;color:var(--texte-doux);border-radius:999px;padding:6px 10px;font:600 .8125rem/1 var(--police)}
+.intro-maquette{padding:20px max(16px,env(safe-area-inset-right,0px)) 0 max(16px,env(safe-area-inset-left,0px));color:var(--texte-doux);font-size:.875rem}
+.intro-maquette strong{color:var(--texte)}
+.mesure-maquette{margin:0;padding:0 max(16px,env(safe-area-inset-right,0px)) 0 max(16px,env(safe-area-inset-left,0px));font:600 .8125rem/1.4 var(--police);color:var(--alerte)}
+
+/* ---------- Écran ---------- */
+.ecran{
+  position:relative;overflow:hidden;isolation:isolate;
+  display:flex;flex-direction:column;gap:18px;
+  min-height:calc(100svh - env(safe-area-inset-top,0px) - env(safe-area-inset-bottom,0px));
+  padding-block:18px 26px;
+  padding-left:max(18px,env(safe-area-inset-left,0px));
+  padding-right:max(18px,env(safe-area-inset-right,0px));
+  background:radial-gradient(120% 55% at 50% -10%,var(--fond-haut) 0%,rgba(21,71,74,0) 70%),var(--fond);
+}
+@media (min-width:600px){
+  .ecran{min-height:820px;border-radius:36px;border:1px solid var(--filet);box-shadow:var(--ombre)}
+}
+.ecran.entre{animation:a-apparait 360ms var(--doux) both}
+.bas{margin-top:auto;display:grid;gap:12px}
+
+.barre{display:flex;align-items:center;gap:10px;min-height:40px}
+.barre .titre-barre{font:800 1.125rem/1.1 var(--police-titre);letter-spacing:-.01em}
+.barre .droite{margin-left:auto;display:flex;gap:8px;align-items:center}
+.puce{display:inline-flex;align-items:center;gap:6px;padding:6px 12px;border-radius:999px;background:var(--panneau-clair);color:var(--texte);font:700 .8125rem/1 var(--police);box-shadow:0 3px 0 var(--panneau-levre);white-space:nowrap}
+.puce .code{font-family:var(--police-titre);letter-spacing:.14em}
+.puce svg{width:16px;height:16px}
+.puce-equipe{--e:var(--e1);background:var(--e);color:var(--encre);box-shadow:0 3px 0 rgba(0,0,0,.35)}
+.btn-rond{width:44px;height:44px;border-radius:50%;border:0;background:var(--panneau-clair);color:var(--texte);display:grid;place-items:center;box-shadow:var(--reflet),0 4px 0 var(--panneau-levre);transition:transform var(--rapide) ease}
+.btn-rond:active{transform:translateY(3px)}
+.btn-rond svg{width:20px;height:20px}
+
+.h-ecran{margin:0;font:800 clamp(1.75rem,7.4vw,2.125rem)/1.05 var(--police-titre);letter-spacing:-.025em}
+.sous{margin:6px 0 0;color:var(--texte-doux)}
+.etiquette{font:700 .8125rem/1.2 var(--police);letter-spacing:.08em;text-transform:uppercase;color:var(--texte-faible)}
+
+/* ---------- Boutons ---------- */
+.btn{
+  position:relative;display:flex;align-items:center;justify-content:center;gap:10px;
+  width:100%;min-height:58px;padding:0 22px;border:0;border-radius:var(--rayon-m);
+  font:800 1.125rem/1.1 var(--police-titre);letter-spacing:-.01em;text-align:center;
+  transition:transform var(--rapide) ease;
+}
+.btn svg{width:22px;height:22px;flex:none}
+.btn:active{transform:translateY(4px)}
+.btn-action{background:var(--action);color:var(--sur-action);box-shadow:var(--reflet),0 6px 0 var(--action-levre),0 14px 24px rgba(149,134,17,.28)}
+.btn-action:active{box-shadow:var(--reflet),0 2px 0 var(--action-levre)}
+.btn-carte{background:var(--carte);color:var(--encre);box-shadow:var(--reflet),0 6px 0 var(--carte-levre)}
+.btn-carte:active{box-shadow:0 2px 0 var(--carte-levre)}
+.btn-second{background:var(--panneau-clair);color:var(--texte);box-shadow:inset 0 1px 0 rgba(255,255,255,.12),0 5px 0 var(--panneau-levre)}
+.btn-second:active{box-shadow:0 1px 0 var(--panneau-levre)}
+.btn-encre{background:var(--encre);color:var(--carte);box-shadow:0 4px 0 #020807;min-height:48px;font-size:1rem}
+.btn-lien{background:transparent;color:var(--texte-doux);min-height:48px;font:700 1rem/1 var(--police);text-decoration:underline;text-underline-offset:4px;box-shadow:none}
+.btn[disabled]{opacity:.45;cursor:not-allowed;transform:none}
+
+.plateau{background:var(--panneau);border-radius:var(--rayon);padding:16px;box-shadow:inset 0 1px 0 rgba(255,255,255,.07),0 6px 0 var(--panneau-levre)}
+.plateau-carte{background:var(--carte);color:var(--encre);border-radius:var(--rayon);padding:18px;box-shadow:var(--reflet),0 7px 0 var(--carte-levre),var(--ombre)}
+
+/* Jetons */
+.pastille{
+  --j:var(--j1);--t:40px;
+  position:relative;flex:none;width:var(--t);height:var(--t);border-radius:50%;
+  display:grid;place-items:center;background:var(--j);color:var(--encre);
+  font:800 calc(var(--t)*.42)/1 var(--police-titre);
+  box-shadow:inset 0 -4px 0 rgba(0,0,0,.18),inset 0 3px 0 rgba(255,255,255,.35),0 3px 0 rgba(0,0,0,.35);
+}
+.pastille::after{content:"";position:absolute;inset:calc(var(--t)*.1);border-radius:50%;border:2px dashed rgba(255,255,255,.55)}
+.pastille.grande{--t:76px}
+.pastille.petite{--t:30px}
+.pastille.petite::after{inset:3px;border-width:1.5px}
+.badge{display:inline-flex;align-items:center;padding:3px 8px;border-radius:999px;font:700 .75rem/1.2 var(--police);letter-spacing:.03em;white-space:nowrap}
+.badge-vous{background:var(--carte);color:var(--encre)}
+.badge-hote{background:var(--alerte);color:var(--encre)}
+.badge-off{border:1px dashed var(--texte-faible);color:var(--texte-doux)}
+
+/* Attente (seul l'hôte peut agir) */
+.attente{display:flex;align-items:center;gap:14px;padding:16px;border-radius:var(--rayon-m);background:var(--panneau);border:2px dashed var(--filet)}
+.attente p{margin:0;color:var(--texte-doux)}
+.attente strong{color:var(--texte);display:block;font:800 1.0625rem/1.2 var(--police-titre)}
+.points-attente{display:flex;gap:5px;flex:none}
+.points-attente i{width:9px;height:9px;border-radius:50%;background:var(--action);animation:a-sautille 1.2s ease-in-out infinite}
+.points-attente i:nth-child(2){animation-delay:.15s}
+.points-attente i:nth-child(3){animation-delay:.3s}
+.ecran .action-hote{display:none}
+.ecran.est-hote .action-hote{display:flex}
+.ecran.est-hote .attente-invite{display:none}
+
+/* Emplacements d'images : photos réalistes IA, remplacées par <img> en object-fit:cover.
+   Jamais de texte posé sur une photo. */
+.emplacement-image{
+  position:relative;display:grid;place-items:center;width:100%;max-width:100%;overflow:hidden;text-align:center;
+  background:repeating-linear-gradient(135deg,#1A4B4C 0 14px,#143F40 14px 28px);
+  outline:2px dashed var(--alerte);outline-offset:-8px;color:var(--texte);
+}
+.emplacement-image > span{padding:10px 14px;font:600 .8125rem/1.35 var(--police);background:rgba(5,22,23,.86);border-radius:10px;max-width:90%}
+.emplacement-image b{display:block;font:800 .9375rem/1.2 var(--police-titre);color:var(--alerte);margin-bottom:2px}
+.emplacement-image img{position:absolute;inset:0;width:100%;height:100%;object-fit:cover}
+.ratio-4-3{aspect-ratio:4/3}
+.ratio-16-9{aspect-ratio:16/9}
+
+/* ---------- 1. Accueil ---------- */
+.cadre-photo{
+  margin:8px auto 0;width:min(100%,340px);padding:10px;border-radius:26px;background:var(--carte);
+  rotate:-2deg;box-shadow:var(--reflet),0 8px 0 var(--carte-levre),0 18px 36px rgba(2,10,10,.55);
+}
+.cadre-photo .emplacement-image{border-radius:18px}
+.flotte-lente{animation:a-flotte 6s ease-in-out infinite}
+/* Le nom en 5 galets « C H U T ! » : 5 × 57,6 + 4 × 6 = 312 px à 360 px pour 324 utiles */
+.wordmark{margin:4px 0 0;display:flex;justify-content:center;gap:6px}
+.galet{
+  --i:0;display:grid;place-items:center;
+  width:clamp(50px,16vw,62px);height:clamp(62px,19vw,76px);
+  border-radius:46% 54% 48% 52% / 56% 50% 50% 44%;
+  background:var(--carte);color:var(--encre);font:800 clamp(2.25rem,11vw,2.875rem)/1 var(--police-titre);
+  box-shadow:var(--reflet),0 6px 0 var(--carte-levre),0 10px 18px rgba(2,10,10,.45);
+  animation:a-gue 520ms var(--ressort) both;animation-delay:calc(var(--i)*80ms);
+}
+.galet:nth-child(odd){translate:0 -5px}
+.galet.citron{background:var(--action);rotate:6deg;box-shadow:var(--reflet),0 6px 0 var(--action-levre),0 10px 18px rgba(2,10,10,.45)}
+.sous-titre-jeu{margin:14px 0 0;text-align:center;font:800 1.125rem/1.2 var(--police-titre);color:var(--action);letter-spacing:.01em}
+.accroche{margin:8px auto 0;max-width:31ch;text-align:center;color:var(--texte-doux)}
+.mention-bas{text-align:center;font-size:.8125rem;color:var(--texte-faible);margin:4px 0 0}
+/* Écran court (360 × 640) : la photo se réduit pour que « Créer » et « Rejoindre » restent sans défiler */
+@media (max-height:740px){
+  #ecran-accueil{gap:12px;padding-block:12px 18px}
+  #ecran-accueil .cadre-photo{width:min(100%,200px);padding:8px;margin-top:4px}
+  #ecran-accueil .bas{gap:10px}
+}
+
+/* ---------- 2. Entrée ---------- */
+.form-entree{display:grid;gap:20px}
+.champ{display:grid;gap:8px}
+.champ label{font:700 .9375rem/1.2 var(--police)}
+.champ .aide{font-size:.875rem;color:var(--texte-doux);margin:0}
+.saisie{
+  width:100%;min-height:58px;padding:0 18px;border-radius:var(--rayon-m);border:3px solid transparent;
+  background:var(--carte);color:var(--encre);font:700 1.125rem/1 var(--police);
+  box-shadow:inset 0 3px 0 rgba(19,32,31,.12),0 4px 0 var(--carte-levre);
+}
+.saisie::placeholder{color:#6E7C79;font-weight:600}
+.saisie:focus{outline:none;border-color:var(--action-levre)}
+.saisie-code{min-height:84px;text-align:center;text-transform:uppercase;font:800 2.75rem/1 var(--police-titre);letter-spacing:.42em;padding-left:.42em}
+.saisie.refusee{border-color:var(--urgence)}
+.secoue{animation:a-secousse 400ms ease both}
+#ecran-entree .txt-creer,#ecran-entree .txt-rejoindre{display:none}
+#ecran-entree.mode-creer .txt-creer{display:inline}
+#ecran-entree.mode-rejoindre .txt-rejoindre{display:inline}
+#ecran-entree.mode-creer #champ-code-bloc{display:none}
+
+/* ---------- 3. Salle d'attente ---------- */
+.bloc-code{text-align:center;padding:16px}
+.bloc-code .etiquette{color:var(--encre-douce)}
+.code-geant{display:flex;justify-content:center;gap:8px;margin:10px 0 12px}
+.code-geant span{width:56px;height:68px;border-radius:14px;display:grid;place-items:center;background:#FFFFFF;color:var(--encre);font:800 2.5rem/1 var(--police-titre);box-shadow:inset 0 -4px 0 rgba(19,32,31,.08),0 4px 0 var(--carte-levre)}
+.tete-liste{display:flex;align-items:baseline;justify-content:space-between;gap:10px;margin-bottom:10px}
+.tete-liste h2{margin:0;font:800 1.25rem/1 var(--police-titre)}
+.compte{font:700 .9375rem/1 var(--police);color:var(--texte-doux)}
+
+.reglage{display:flex;align-items:center;gap:12px;min-height:58px;padding:6px 0;border-top:1px solid var(--filet)}
+.reglage:first-of-type{border-top:0}
+.reglage .lib{flex:1;min-width:0}
+.lib-reglage{display:block;font:700 1rem/1.2 var(--police)}
+.reglage .lib small,.reglage-col small{display:block;color:var(--texte-doux);font-size:.875rem;margin-top:2px}
+.pas{display:flex;align-items:center;gap:6px;flex:none}
+.pas .valeur{min-width:30px;text-align:center;font:800 1.5rem/1 var(--police-titre)}
+.pas button{width:44px;height:44px;border-radius:14px;border:0;background:var(--carte);color:var(--encre);font:800 1.375rem/1 var(--police-titre);box-shadow:0 4px 0 var(--carte-levre);transition:transform var(--rapide) ease}
+.pas button:active{transform:translateY(3px)}
+.pas button[disabled]{opacity:.4;cursor:not-allowed;transform:none;box-shadow:none}
+.reglage-col{display:block;padding:10px 0 6px;border-top:1px solid var(--filet)}
+.segments{display:grid;grid-template-columns:repeat(var(--n,3),1fr);gap:6px;padding:5px;border-radius:16px;background:var(--panneau-levre);margin-top:8px}
+.segments.n2{--n:2}
+.segments.n4{--n:4}
+.segments label{position:relative;min-width:0}
+.segments input{position:absolute;opacity:0;inset:0;margin:0;cursor:pointer}
+.segments span{display:grid;place-items:center;min-height:44px;padding:0 4px;border-radius:12px;font:700 .9375rem/1.1 var(--police);color:var(--texte-doux);text-align:center}
+.segments input:checked + span{background:var(--carte);color:var(--encre);box-shadow:0 3px 0 var(--carte-levre)}
+.segments input:focus-visible + span{outline:3px solid var(--focus);outline-offset:2px}
+
+.resume-reglages{display:flex;flex-wrap:wrap;gap:8px;margin:0;padding:0;list-style:none}
+.resume-reglages li{padding:8px 12px;border-radius:12px;background:var(--panneau-clair);font:700 .9375rem/1.1 var(--police)}
+.resume-reglages li span{color:var(--texte-doux);font-weight:600}
+
+#ecran-attente #reglages-hote,#ecran-attente #btn-lancer,#ecran-attente #raison-lancer,#ecran-attente #btn-melanger{display:none}
+#ecran-attente.est-hote #reglages-hote{display:block}
+#ecran-attente.est-hote #btn-lancer{display:flex}
+#ecran-attente.est-hote #raison-lancer{display:block}
+#ecran-attente.est-hote.repartition-hasard #btn-melanger{display:flex}
+#ecran-attente.est-hote #attente-invite,#ecran-attente.est-hote #resume-reglages-invite{display:none}
+#ecran-attente .btn-choisir-equipe{display:none}
+#ecran-attente.repartition-choix .btn-choisir-equipe{display:flex}
+#ecran-attente.repartition-choix .equipe.est-mienne .btn-choisir-equipe{display:none}
+#ecran-attente #note-hasard{display:none}
+#ecran-attente.repartition-hasard #note-hasard{display:flex}
+#ecran-attente #note-choix{display:none}
+#ecran-attente.repartition-choix #note-choix{display:block}
+
+.equipes{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:10px}
+.equipe{
+  --e:var(--e1);position:relative;min-width:0;display:grid;align-content:start;gap:8px;
+  padding:0 0 10px;border-radius:18px;background:var(--panneau-clair);overflow:hidden;box-shadow:0 4px 0 var(--panneau-levre)
+}
+.equipe-tete{display:flex;align-items:center;gap:8px;padding:10px 12px;background:var(--e);color:var(--encre)}
+.equipe-tete strong{font:800 1rem/1.1 var(--police-titre);min-width:0}
+.equipe-tete .nb{margin-left:auto;font:800 .875rem/1 var(--police)}
+.equipe .mienne{display:none;margin:0 10px;font:700 .75rem/1.2 var(--police);color:var(--texte)}
+.equipe.est-mienne{box-shadow:0 4px 0 var(--panneau-levre),inset 0 0 0 3px var(--e)}
+.equipe.est-mienne .mienne{display:block}
+.equipe .manque{display:none;margin:0 10px;font:700 .8125rem/1.2 var(--police);color:var(--alerte)}
+.equipe.incomplete .manque{display:block}
+#ecran-attente.repartition-hasard .equipe .manque{display:none}
+.liste-membres{list-style:none;margin:0;padding:0 10px;display:grid;gap:6px}
+.joueur{display:flex;align-items:center;gap:8px;min-width:0}
+.joueur .nom{font:700 .9375rem/1.2 var(--police);min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.joueur .badges{margin-left:auto;display:flex;gap:4px;flex:none}
+/* Leçon de Babel, partout où le motif existe : le badge passe sous le prénom, le prénom long passe à la ligne */
+.equipe .joueur,.sans-equipe .joueur{flex-wrap:wrap;row-gap:2px}
+.equipe .joueur .nom,.sans-equipe .joueur .nom{flex:1;white-space:normal;overflow-wrap:anywhere}
+.equipe .joueur .badges,.sans-equipe .joueur .badges{flex-basis:100%;margin-left:38px}
+.joueur.est-moi .nom{text-decoration:underline;text-decoration-thickness:2px;text-underline-offset:3px}
+.joueur.deconnecte .pastille{filter:grayscale(1);opacity:.55}
+.joueur.deconnecte .nom{color:var(--texte-doux)}
+.joueur.vient-d-arriver{animation:a-entree-joueur 600ms var(--ressort) both}
+.btn-choisir-equipe{margin:2px 10px 0;min-height:44px;width:auto;font-size:.9375rem;padding:0 10px}
+.equipes.melange .equipe{animation:a-melange 500ms var(--ressort) both}
+.equipes.melange .equipe:nth-child(2){animation-delay:60ms}
+.equipes.melange .equipe:nth-child(3){animation-delay:120ms}
+.equipes.melange .equipe:nth-child(4){animation-delay:180ms}
+.sans-equipe{margin-top:12px;padding-top:12px;border-top:1px dashed var(--filet)}
+.sans-equipe .etiquette{margin-bottom:8px}
+.sans-equipe .liste-membres{padding:0;grid-template-columns:repeat(auto-fill,minmax(130px,1fr))}
+.note{display:flex;gap:10px;align-items:flex-start;margin:12px 0 0;font-size:.9375rem;color:var(--texte-doux)}
+.note svg{width:20px;height:20px;flex:none;color:var(--action);margin-top:1px}
+.note-lancer{text-align:center;margin:0;font-size:.9375rem;color:var(--alerte);font-weight:700}
+
+/* ---------- 4. Annonce (avant le premier tour) ---------- */
+#ecran-annonce{text-align:center}
+.titre-annonce{margin:4px 0 0;font:800 clamp(2rem,9vw,2.5rem)/1.02 var(--police-titre);letter-spacing:-.03em}
+.titre-annonce em{font-style:normal;color:var(--action)}
+.cadre-manche{padding:8px;border-radius:22px;background:var(--carte);box-shadow:var(--reflet),0 6px 0 var(--carte-levre)}
+.cadre-manche .emplacement-image{border-radius:16px}
+.trois-roles{list-style:none;margin:0;padding:0;display:grid;gap:8px;text-align:left}
+.trois-roles li{display:grid;grid-template-columns:auto 1fr;gap:12px;align-items:center;padding:10px 12px;border-radius:16px;background:var(--panneau-clair)}
+.trois-roles .ico{width:40px;height:40px;border-radius:12px;display:grid;place-items:center;background:var(--carte);color:var(--encre)}
+.trois-roles .ico svg{width:22px;height:22px}
+.trois-roles .ico.rouge{background:var(--buzz)}
+.trois-roles strong{display:block;font:800 1rem/1.15 var(--police-titre)}
+.trois-roles span{font-size:.9375rem;color:var(--texte-doux)}
+.qui-commence{display:flex;align-items:center;justify-content:center;gap:8px;flex-wrap:wrap;font-weight:700;margin:0}
+.duree-partie{margin:0;color:var(--texte-faible);font-size:.875rem}
+
+/* ---------- 5. On y va ? ---------- */
+#ecran-pret{text-align:center}
+#ecran-pret .vue{display:none}
+#ecran-pret.role-parleur .vue-parleur,#ecran-pret.role-equipe .vue-equipe,#ecran-pret.role-adverse .vue-adverse{display:grid}
+#ecran-pret .vue{gap:16px;justify-items:center}
+#ecran-pret .secours{display:none}
+#ecran-pret.pilote-secours .secours{display:grid}
+.grand-titre{margin:0;font:800 clamp(2.25rem,11vw,2.875rem)/1 var(--police-titre);letter-spacing:-.03em}
+.btn-go{
+  width:clamp(170px,52vw,210px);height:clamp(170px,52vw,210px);border-radius:50%;border:0;
+  background:var(--action);color:var(--encre);font:800 3.5rem/1 var(--police-titre);letter-spacing:-.02em;
+  box-shadow:var(--reflet),0 10px 0 var(--action-levre),0 0 0 10px rgba(242,225,76,.16),0 22px 40px rgba(149,134,17,.35);
+  animation:a-pouls-go 1.6s ease-in-out infinite;transition:transform var(--rapide) ease
+}
+.btn-go:active{transform:translateY(6px);animation:none}
+.rappel{padding:12px 14px;border-radius:16px;background:var(--panneau);display:flex;gap:10px;align-items:center;text-align:left;width:100%}
+.rappel svg{width:28px;height:28px;flex:none;color:var(--action)}
+.rappel p{margin:0;color:var(--texte-doux);font-size:.9375rem}
+.rappel strong{color:var(--texte)}
+.rappel.rouge svg{color:var(--urgence-texte)}
+.ligne-interrupteur{display:flex;align-items:center;justify-content:space-between;gap:12px;width:100%;padding:8px 4px;text-align:left}
+.ligne-interrupteur span{font-weight:700}
+.ligne-interrupteur small{display:block;color:var(--texte-doux);font-weight:500}
+.interrupteur{position:relative;flex:none;width:64px;height:38px}
+.interrupteur input{position:absolute;inset:0;opacity:0;margin:0;cursor:pointer;z-index:1}
+.interrupteur .rail{position:absolute;inset:0;border-radius:999px;background:var(--panneau-levre);box-shadow:inset 0 2px 4px rgba(0,0,0,.4)}
+.interrupteur .rail::before{content:"";position:absolute;inset:0;border-radius:999px;background:var(--action);opacity:0;transition:opacity var(--moyen) ease}
+.interrupteur .bouton{position:absolute;top:4px;left:4px;width:30px;height:30px;border-radius:50%;background:var(--carte);box-shadow:0 3px 0 var(--carte-levre);transition:transform var(--moyen) var(--ressort)}
+.interrupteur input:checked ~ .rail::before{opacity:1}
+.interrupteur input:checked ~ .bouton{transform:translateX(26px)}
+.interrupteur input:focus-visible ~ .rail{outline:3px solid var(--focus);outline-offset:3px}
+.qui-parle{display:grid;justify-items:center;gap:10px}
+.qui-parle .prenom{font:800 1.75rem/1 var(--police-titre)}
+
+/* ---------- 6. Chronomètre ---------- */
+/* Compact (parleur, adversaires) : chiffres à gauche, barre à droite, et la ligne
+   « Dernières secondes » RÉSERVÉE sous la barre : elle n'agrandit jamais l'écran. */
+.chrono{display:grid;grid-template-columns:auto minmax(0,1fr);align-items:center;gap:4px 12px}
+.chrono-ligne{display:flex;align-items:baseline;gap:3px;grid-row:span 2}
+.chrono-chiffres{font:800 2.5rem/.9 var(--police-titre);font-variant-numeric:tabular-nums;letter-spacing:-.04em;color:var(--texte);display:inline-block;min-width:1.25em;text-align:right}
+.chrono-unite{font:800 1.125rem/1 var(--police-titre);color:var(--texte-doux)}
+.chrono-rail{height:14px;border-radius:999px;background:var(--panneau-levre);overflow:hidden;box-shadow:inset 0 2px 3px rgba(0,0,0,.4)}
+.chrono-reste{--reste:1;display:block;height:100%;border-radius:999px;background:var(--action);transform-origin:left center;transform:scaleX(var(--reste));transition:transform .1s linear}
+.chrono-alerte{visibility:hidden;font:800 .875rem/1 var(--police-titre);color:var(--urgence-texte);min-height:1em}
+/* Géant (son équipe) : empilé, centré */
+.chrono-geant{grid-template-columns:1fr;justify-items:stretch;text-align:center}
+.chrono-geant .chrono-ligne{grid-row:auto;justify-content:center}
+.chrono-geant .chrono-chiffres{font-size:clamp(7rem,40vw,10rem);min-width:0;text-align:center}
+.chrono-geant .chrono-unite{font-size:2.25rem}
+.chrono-geant .chrono-rail{height:20px}
+.chrono-geant .chrono-alerte{font-size:1rem}
+.fin-proche .chrono-chiffres{color:var(--urgence-texte);animation:a-battement 1s ease-out infinite}
+.fin-proche .chrono-reste{background:var(--urgence)}
+.fin-proche .chrono-alerte{visibility:visible}
+.ecran::after{content:"";position:absolute;inset:0;z-index:-1;pointer-events:none;opacity:0;box-shadow:inset 0 0 0 6px var(--urgence),inset 0 0 70px rgba(255,90,95,.45)}
+.ecran.fin-proche::after{animation:a-halo 1s ease-out infinite}
+.ecran.temps-ecoule::after{opacity:1;animation:none}
+.temps-ecoule .chrono-chiffres{color:var(--urgence-texte);animation:none}
+
+/* ---------- La carte : le MOT, puis la bande des 5 interdits ---------- */
+/* Hiérarchie : le mot en grand sur le crème ; les interdits en encre sur une bande
+   rose pâle séparée, étiquetée « Interdit » en rouge. Le rouge est réservé à
+   l'étiquette et au filet : les mots eux-mêmes restent en encre, ils se lisent d'un
+   coup d'œil sans voler la vedette. */
+.carte-jeu{
+  width:100%;border-radius:28px;background:var(--carte);color:var(--encre);overflow:hidden;
+  display:grid;grid-template-rows:auto auto;text-align:center;
+  box-shadow:var(--reflet),0 8px 0 var(--carte-levre),var(--ombre)
+}
+.carte-tete{display:grid;justify-items:center;align-content:center;gap:8px;padding:16px 16px 14px;min-height:100px}
+.carte-tete .filet-mot{width:48px;height:6px;border-radius:3px;background:var(--action-levre)}
+.mot-carte{font:800 clamp(2.125rem,10.5vw,2.75rem)/1.02 var(--police-titre);letter-spacing:-.03em;overflow-wrap:anywhere;hyphens:manual}
+.mot-carte.long{font-size:clamp(1.75rem,8.4vw,2.25rem)}
+.mot-carte.tres-long{font-size:clamp(1.5rem,7vw,1.875rem);line-height:1.05}
+.mot-carte .precision{display:block;margin-top:4px;font:700 1rem/1.2 var(--police);letter-spacing:0;color:var(--encre-douce)}
+.interdits{
+  position:relative;margin:0;padding:10px 14px 12px;list-style:none;
+  background:var(--interdit-fond);border-top:3px solid var(--interdit-filet);
+  display:grid;gap:3px
+}
+.interdits::before{
+  content:"Interdit";display:flex;justify-content:center;align-items:center;gap:6px;margin-bottom:3px;
+  font:800 .75rem/1 var(--police);letter-spacing:.14em;text-transform:uppercase;color:var(--interdit-texte)
+}
+.interdits li{font:700 1.125rem/1.2 var(--police);color:var(--encre);overflow-wrap:anywhere}
+.interdits.longs li{font-size:1rem}
+.carte-jeu.sort-trouve{animation:a-sort-trouve 220ms ease-in both}
+.carte-jeu.sort-passe{animation:a-sort-passe 220ms ease-in both}
+.carte-jeu.sort-buzz{animation:a-sort-buzz 300ms ease-in both}
+.carte-jeu.entre{animation:a-entre-carte 200ms var(--doux) both}
+
+/* ---------- 6a. Tour : qui fait deviner ---------- */
+/* Budget à 360 × 640 (pire cas du contrat) : 26 + barre 40 + chrono 44 + carte ≤ 300
+   + pouce ≥ 120 + 4 écarts de 10 = 570. Mesure réelle : voir démo « pire cas ». */
+#ecran-tour-parleur{gap:10px;padding-block:12px 14px}
+.compteurs{display:flex;gap:6px}
+.compteur{display:inline-flex;align-items:center;gap:5px;padding:5px 10px;border-radius:999px;background:var(--panneau-clair);font:700 .8125rem/1 var(--police);color:var(--texte-doux);white-space:nowrap}
+.compteur b{font:800 1.125rem/1 var(--police-titre);color:var(--texte);display:inline-block}
+.compteur svg{width:14px;height:14px}
+.compteur.c-trouve svg{color:var(--trouve)}
+.compteur.c-buzz svg{color:var(--urgence-texte)}
+.pop{animation:a-pop 300ms var(--ressort)}
+.zone-carte{flex:1;display:grid;align-items:center}
+.note-derniere{display:none;margin:0;text-align:center;font-size:.875rem;color:var(--texte-doux)}
+#ecran-tour-parleur.derniere-carte .note-derniere{display:block}
+.duo-pouce{display:grid;grid-template-columns:1fr 1.35fr;gap:12px}
+#ecran-tour-parleur.gaucher .duo-pouce{grid-template-columns:1.35fr 1fr}
+#ecran-tour-parleur.gaucher #btn-trouve{order:-1}
+.btn-pouce{
+  min-height:clamp(120px,22svh,200px);flex-direction:column;gap:8px;border-radius:26px;font-size:1.375rem;padding:0 10px;
+  touch-action:manipulation;-webkit-user-select:none;user-select:none
+}
+.btn-pouce svg{width:44px;height:44px}
+.btn-trouve{background:var(--trouve);color:var(--encre);box-shadow:var(--reflet),0 8px 0 var(--trouve-levre),0 14px 26px rgba(28,138,85,.3)}
+.btn-trouve:active{box-shadow:var(--reflet),0 2px 0 var(--trouve-levre);transform:translateY(6px)}
+.btn-passer{background:var(--carte);color:var(--encre);box-shadow:var(--reflet),0 8px 0 var(--carte-levre)}
+.btn-passer:active{box-shadow:0 2px 0 var(--carte-levre);transform:translateY(6px)}
+
+/* ---------- 6b. Tour : son équipe ---------- */
+#ecran-tour-equipe{text-align:center;justify-content:space-between}
+.devinez{margin:0;font:800 clamp(3rem,16vw,4.25rem)/.95 var(--police-titre);letter-spacing:-.04em;color:var(--action)}
+.consigne-equipe{margin:6px 0 0;color:var(--texte-doux);font-size:1.0625rem}
+.compteurs-grands{display:grid;grid-template-columns:1fr 1fr;gap:10px}
+.compteur-grand{display:grid;justify-items:center;gap:4px;padding:14px 8px;border-radius:var(--rayon);background:var(--panneau)}
+.compteur-grand b{font:800 2.75rem/1 var(--police-titre);display:inline-block}
+.compteur-grand span{color:var(--texte-doux);font-weight:700;font-size:.9375rem}
+.compteur-grand.c-buzz b{color:var(--urgence-texte)}
+
+/* ---------- 6c. Tour : les adversaires ---------- */
+#ecran-tour-adverse{gap:10px;padding-block:12px 14px}
+#ecran-tour-adverse .carte-tete{min-height:84px;padding-block:12px 10px}
+.buzzer{
+  position:relative;flex:1 1 auto;min-height:clamp(170px,30svh,320px);width:100%;border:0;border-radius:32px;
+  display:grid;place-items:center;align-content:center;gap:6px;
+  background:radial-gradient(90% 80% at 50% 30%,#FF7A70 0%,var(--buzz) 60%);color:var(--encre);
+  box-shadow:var(--reflet),0 10px 0 var(--buzz-levre),0 0 0 8px var(--buzz-anneau),0 20px 40px rgba(158,31,42,.4);
+  touch-action:manipulation;-webkit-user-select:none;user-select:none;
+  transition:transform 90ms ease,box-shadow 90ms ease
+}
+.buzzer::before{content:"";position:absolute;inset:-8px;border-radius:40px;box-shadow:0 0 0 3px var(--buzz-anneau);animation:a-veille 2.4s ease-in-out infinite;pointer-events:none}
+.buzzer .mot-buzz{font:800 clamp(3rem,15vw,4.25rem)/.9 var(--police-titre);letter-spacing:-.03em}
+.buzzer .aide-buzz{font:700 .9375rem/1.25 var(--police);max-width:26ch;padding:0 12px}
+.buzzer:active,.buzzer.enfonce{transform:translateY(7px);box-shadow:var(--reflet),0 3px 0 var(--buzz-levre),0 0 0 8px var(--buzz-anneau)}
+.buzzer.enfonce{animation:a-enfonce 160ms ease-out}
+.buzzer[disabled]{opacity:.4;cursor:not-allowed;transform:none}
+.buzzer[disabled]::before{animation:none;opacity:0}
+.ecran.buzz-en-cours .btn-pouce,.ecran.buzz-en-cours .buzzer{pointer-events:none}
+
+/* ---------- 6d. Voile du buzz (commun aux trois écrans, enfant direct de body) ---------- */
+.voile-buzz{
+  position:fixed;inset:0;z-index:70;display:grid;place-items:center;
+  padding:max(24px,env(safe-area-inset-top,0px)) max(18px,env(safe-area-inset-right,0px)) max(24px,env(safe-area-inset-bottom,0px)) max(18px,env(safe-area-inset-left,0px));
+  background:rgba(5,22,23,.93);opacity:0;pointer-events:none;
+}
+.voile-buzz.visible{opacity:1;pointer-events:auto;animation:a-voile 240ms ease-out both}
+.voile-contenu{width:min(100%,394px);display:grid;justify-items:center;gap:14px;text-align:center}
+.disque-buzz{
+  width:132px;height:132px;border-radius:50%;display:grid;place-items:center;
+  background:var(--buzz);color:var(--encre);font:800 2.25rem/1 var(--police-titre);letter-spacing:-.02em;rotate:-6deg;
+  box-shadow:var(--reflet),0 7px 0 var(--buzz-levre),0 0 0 10px var(--buzz-anneau)
+}
+.voile-buzz.visible .disque-buzz{animation:a-tampon-buzz 420ms var(--ressort) both}
+.voile-titre{margin:0;font:800 clamp(1.75rem,8vw,2.25rem)/1.05 var(--police-titre);letter-spacing:-.02em}
+.voile-qui{display:flex;align-items:center;justify-content:center;gap:8px;flex-wrap:wrap;margin:0;font-weight:700;color:var(--texte-doux)}
+.voile-mot{width:100%;padding:12px 16px;border-radius:20px;background:var(--carte);color:var(--encre);box-shadow:0 6px 0 var(--carte-levre)}
+.voile-mot .etiquette{color:var(--encre-douce);display:block;margin-bottom:4px}
+.voile-mot b{font:800 clamp(1.5rem,7.5vw,2rem)/1.05 var(--police-titre);overflow-wrap:anywhere}
+.voile-buzz .t-vue{display:none}
+.voile-buzz .t-tous{display:inline}
+.voile-buzz.vue-buzzeur .t-tous,.voile-buzz.vue-parleur .t-tous,.voile-buzz.vue-trop-tard .t-tous{display:none}
+.voile-buzz.vue-buzzeur .t-buzzeur,.voile-buzz.vue-parleur .t-parleur,.voile-buzz.vue-trop-tard .t-trop-tard{display:inline}
+.voile-suite{margin:0;font-size:.875rem;color:var(--texte-faible)}
+
+/* ---------- 7. Fin du tour ---------- */
+#ecran-fin-tour{text-align:center}
+.points-tour{display:grid;justify-items:center;gap:6px}
+.points-tour .plus{font:800 clamp(4rem,22vw,5.5rem)/.9 var(--police-titre);letter-spacing:-.04em;color:var(--action)}
+.gains-adverses{display:flex;justify-content:center;gap:8px;flex-wrap:wrap;margin:0;padding:0;list-style:none}
+.gains-adverses li{display:inline-flex;align-items:center;gap:6px}
+.groupe-cartes{display:grid;gap:8px;text-align:left}
+.groupe-cartes h3{margin:0;display:flex;align-items:center;gap:8px;font:800 1rem/1.1 var(--police-titre)}
+.groupe-cartes h3 svg{width:20px;height:20px}
+.groupe-cartes h3 .n{margin-left:auto;font:700 .875rem/1 var(--police);color:var(--texte-doux)}
+.g-trouvees h3 svg{color:var(--trouve)}
+.g-buzzees h3 svg{color:var(--urgence-texte)}
+.g-passees h3 svg{color:var(--texte-doux)}
+/* Puces qui s'enroulent : 20 cartes tiennent en quelques lignes, jamais une colonne interminable */
+.puces-cartes{list-style:none;margin:0;padding:0;display:flex;flex-wrap:wrap;gap:6px}
+.puces-cartes li{--i:0;display:inline-flex;align-items:center;gap:6px;max-width:100%;padding:7px 11px;border-radius:12px;font:800 .9375rem/1.2 var(--police-titre);animation:a-entree-joueur 420ms var(--ressort) both;animation-delay:calc(var(--i)*50ms)}
+.g-trouvees li{background:var(--carte);color:var(--encre);box-shadow:0 3px 0 var(--carte-levre)}
+.g-buzzees li{background:var(--interdit-fond);color:var(--encre);box-shadow:0 3px 0 var(--interdit-filet)}
+.g-buzzees li small{font:700 .75rem/1 var(--police);color:var(--interdit-texte)}
+.g-passees li{background:var(--panneau-clair);color:var(--texte-doux);font-weight:700}
+.puces-cartes li.plus-autres{background:transparent;box-shadow:none;color:var(--texte-doux);font:700 .875rem/1.2 var(--police)}
+.prochain .etiquette{display:block;margin-bottom:2px}
+.aucune{display:none;margin:0;padding:16px;border-radius:16px;background:var(--panneau);color:var(--texte-doux)}
+#ecran-fin-tour.aucune-trouvee .aucune{display:block}
+#ecran-fin-tour.aucune-trouvee .g-trouvees{display:none}
+.avancement{display:grid;gap:6px}
+.avancement .etiquette{text-align:left}
+.rail-tours{height:10px;border-radius:999px;background:var(--panneau-levre);overflow:hidden}
+.rail-tours i{--part:.5;display:block;height:100%;background:var(--action);transform-origin:left center;transform:scaleX(var(--part))}
+.prochain{display:flex;align-items:center;gap:12px;padding:14px;border-radius:var(--rayon-m);background:var(--panneau);text-align:left}
+.prochain p{margin:0;color:var(--texte-doux)}
+.prochain strong{display:block;color:var(--texte);font:800 1.0625rem/1.2 var(--police-titre)}
+.partie-finie{display:none;margin:0;padding:14px;border-radius:var(--rayon-m);background:var(--panneau);font:800 1.125rem/1.2 var(--police-titre)}
+#ecran-fin-tour.dernier-tour .partie-finie{display:block}
+#ecran-fin-tour.dernier-tour .prochain{display:none}
+#ecran-fin-tour .t-podium{display:none}
+#ecran-fin-tour.dernier-tour .t-podium{display:inline}
+#ecran-fin-tour.dernier-tour .t-suite{display:none}
+.tete-score{display:flex;align-items:baseline;justify-content:space-between;gap:10px;margin-top:4px}
+.titre-score{margin:0;font:800 1.375rem/1 var(--police-titre);text-align:left}
+
+/* ---------- Classement (dans la fin du tour) ---------- */
+.classement{list-style:none;margin:0;padding:0;display:grid;gap:10px}
+.ligne-score{--e:var(--e1);display:grid;grid-template-columns:auto minmax(0,1fr) auto;align-items:center;gap:10px;padding:12px;border-radius:18px;background:var(--panneau-clair);box-shadow:0 4px 0 var(--panneau-levre)}
+.ligne-score .rang{width:34px;height:34px;border-radius:50%;display:grid;place-items:center;background:var(--fond);font:800 1rem/1 var(--police-titre)}
+.ligne-score .milieu{min-width:0;display:grid;gap:6px}
+.ligne-score .nom-eq{display:flex;align-items:center;gap:8px;flex-wrap:wrap;font:800 1.0625rem/1.1 var(--police-titre)}
+.ligne-score .nom-eq .tag{display:none}
+.ligne-score.en-tete .nom-eq .tag{display:inline-flex}
+.tag{align-items:center;padding:3px 8px;border-radius:999px;background:var(--carte);color:var(--encre);font:700 .75rem/1.2 var(--police)}
+.pastille-eq{width:14px;height:14px;border-radius:4px;background:var(--e);flex:none;box-shadow:0 2px 0 rgba(0,0,0,.35)}
+.barre-score{height:12px;border-radius:999px;background:var(--panneau-levre);overflow:hidden}
+.barre-score i{--part:1;--i:0;display:block;height:100%;border-radius:999px;background:var(--e);transform-origin:left center;transform:scaleX(var(--part));animation:a-monte 700ms var(--doux) both;animation-delay:calc(var(--i)*90ms + 150ms)}
+.ligne-score .pts{text-align:right}
+.ligne-score .pts b{display:block;font:800 1.75rem/1 var(--police-titre)}
+.ligne-score .pts small{color:var(--texte-doux);font-weight:700;font-size:.8125rem;white-space:nowrap}
+
+/* ---------- 9. Fin de partie ---------- */
+#ecran-fin{text-align:center}
+.titre-fin{margin:0;font:800 clamp(2.25rem,10vw,2.75rem)/1 var(--police-titre);letter-spacing:-.03em}
+.titre-fin .gagnante{display:block;color:var(--action)}
+#ecran-fin .t-egalite{display:none}
+#ecran-fin.ex-aequo .t-egalite{display:block}
+#ecran-fin.ex-aequo .t-victoire{display:none}
+/* Leçon de Babel : les colonnes naissent des marches présentes ; à 2 équipes le podium reste centré */
+.podium{display:grid;grid-auto-flow:column;grid-auto-columns:calc((100% - 16px) / 3);justify-content:center;align-items:end;gap:8px;padding-top:8px}
+.marche{--e:var(--e1);--i:0;display:grid;justify-items:center;gap:6px;min-width:0;animation:a-podium 640ms var(--ressort) both;animation-delay:calc(var(--i)*140ms + 200ms)}
+.marche .eq{font:800 .9375rem/1.15 var(--police-titre);max-width:100%;overflow-wrap:anywhere}
+.marche .bloc{width:100%;border-radius:16px 16px 6px 6px;background:var(--e);color:var(--encre);display:grid;align-content:start;justify-items:center;padding-top:10px;box-shadow:var(--reflet),0 6px 0 rgba(0,0,0,.35)}
+.marche .bloc .r{font:800 2rem/1 var(--police-titre)}
+.marche .bloc .p{font:800 .9375rem/1.2 var(--police)}
+.marche.r1 .bloc{height:150px}
+.marche.r2 .bloc{height:112px}
+.marche.r3 .bloc{height:84px}
+.marche.r1{order:2}.marche.r2{order:1}.marche.r3{order:3}
+/* Ex aequo : deux marches 1 côte à côte, même hauteur ; le moteur pose .r1 sur chacune */
+.hors-podium{list-style:none;margin:0;padding:0;display:grid;gap:6px}
+.hors-podium li{--e:var(--e1);display:flex;align-items:center;gap:10px;padding:10px 12px;border-radius:14px;background:var(--panneau-clair);font-weight:700;text-align:left}
+.hors-podium li b{margin-left:auto;font:800 1.125rem/1 var(--police-titre)}
+#podium.n2 ~ .hors-podium,#podium.n3 ~ .hors-podium{display:none}
+.defile-table{overflow-x:auto;border-radius:18px}
+.detail{width:100%;border-collapse:separate;border-spacing:0;background:var(--panneau);border-radius:18px;overflow:hidden;font-variant-numeric:tabular-nums}
+.titre-detail{margin:0 0 -8px;text-align:left;font:800 1.125rem/1 var(--police-titre)}
+.detail tbody th{white-space:nowrap}
+.detail th,.detail td{padding:10px 6px;text-align:center;border-top:1px solid var(--filet);font-size:.9375rem}
+.detail thead th{border-top:0;color:var(--texte-doux);font:700 .8125rem/1.2 var(--police);text-transform:uppercase;letter-spacing:.06em}
+.detail tbody th{text-align:left;font-weight:700}
+.detail tbody th .pastille-eq{display:inline-block;vertical-align:-1px;margin-right:6px}
+.detail .total{font:800 1.0625rem/1 var(--police-titre);color:var(--action)}
+.confettis{position:absolute;inset:0 0 auto;height:340px;pointer-events:none;z-index:2;overflow:hidden}
+.confettis i{position:absolute;top:-20px;width:12px;height:16px;border-radius:3px;opacity:0;animation:a-confettis 2.4s cubic-bezier(.3,.6,.5,1) forwards}
+
+/* ---------- 10. Règles ---------- */
+.regle{display:grid;gap:10px}
+.regle h3{margin:0;font:800 1.1875rem/1.15 var(--police-titre);display:flex;align-items:center;gap:10px}
+.regle h3 .n{width:30px;height:30px;border-radius:50%;display:grid;place-items:center;background:var(--action);color:var(--encre);font-size:.9375rem;flex:none}
+.regle p{margin:0;color:var(--texte-doux)}
+.roles-regle{list-style:none;margin:0;padding:0;display:grid;gap:8px}
+.roles-regle li{display:flex;gap:10px;align-items:flex-start;font-size:.9375rem;color:var(--texte-doux)}
+.roles-regle li strong{color:var(--texte)}
+.roles-regle svg{width:22px;height:22px;flex:none;color:var(--action);margin-top:1px}
+.roles-regle svg.rouge{color:var(--urgence-texte)}
+.exemple-carte{max-width:280px;margin:2px auto 0}
+.exemple-carte .carte-tete{min-height:0;padding:12px}
+.exemple-carte .mot-carte{font-size:1.75rem}
+.exemple-carte .interdits li{font-size:1rem}
+
+/* ---------- 11. Erreurs ---------- */
+.carte-erreur{display:grid;justify-items:center;gap:12px;text-align:center;padding:24px 18px 20px}
+.carte-erreur .ico-erreur{width:72px;height:72px;border-radius:50%;display:grid;place-items:center;background:var(--fond);color:var(--alerte);box-shadow:inset 0 -4px 0 rgba(0,0,0,.25)}
+.carte-erreur .ico-erreur svg{width:38px;height:38px}
+.carte-erreur h2{margin:0;font:800 1.5rem/1.1 var(--police-titre);letter-spacing:-.02em}
+.carte-erreur p{margin:0;color:var(--texte-doux)}
+.code-faux{font-family:var(--police-titre);font-weight:800;letter-spacing:.14em;color:var(--texte)}
+.tourne{animation:a-tourne 1s linear infinite}
+.bandeau{
+  display:flex;align-items:center;gap:10px;padding:10px 14px;border-radius:14px;
+  font:700 .9375rem/1.25 var(--police);opacity:0;transform:translateY(-8px);
+  transition:opacity 200ms ease,transform 260ms var(--ressort)
+}
+.bandeau.visible{opacity:1;transform:none}
+.bandeau svg{width:20px;height:20px;flex:none}
+#bandeau-connexion{background:var(--alerte);color:var(--encre);box-shadow:0 4px 0 #B88A12}
+#toast-retard{background:var(--carte);color:var(--encre);box-shadow:0 4px 0 var(--carte-levre)}
+/* Dans le jeu construit, les bandeaux sont enfants directs de body et flottent en haut
+   (leçon de Loup : un élément déplacé emporte son positionnement, il se re-mesure) */
+body > .bandeau{
+  position:fixed;z-index:80;top:calc(env(safe-area-inset-top,0px) + 10px);
+  left:max(16px,env(safe-area-inset-left,0px));right:max(16px,env(safe-area-inset-right,0px));
+  max-width:448px;margin-inline:auto;pointer-events:none
+}
+body > .bandeau.visible{pointer-events:auto}
+
+/* ---------- Animations ---------- */
+@keyframes a-apparait{from{opacity:0;transform:translateY(14px)}to{opacity:1;transform:none}}
+@keyframes a-gue{0%{opacity:0;transform:translateY(-26px) scale(.7)}100%{opacity:1;transform:none}}
+@keyframes a-flotte{0%,100%{transform:translateY(0)}50%{transform:translateY(-8px)}}
+@keyframes a-entree-joueur{0%{opacity:0;transform:translateX(-20px) scale(.92)}100%{opacity:1;transform:none}}
+@keyframes a-melange{0%{transform:scale(1)}35%{transform:scale(.94) rotate(-1.5deg)}70%{transform:scale(1.03) rotate(1deg)}100%{transform:none}}
+@keyframes a-pouls-go{0%,100%{transform:scale(1)}50%{transform:scale(1.04)}}
+@keyframes a-sort-trouve{to{opacity:0;transform:translateY(-36px) scale(.92)}}
+@keyframes a-sort-passe{to{opacity:0;transform:translateX(-60%) rotate(-7deg)}}
+@keyframes a-sort-buzz{0%{transform:none}20%{transform:translateX(-10px) rotate(-2deg)}40%{transform:translateX(10px) rotate(2deg)}60%{opacity:1;transform:none}100%{opacity:0;transform:translateY(60px) rotate(4deg) scale(.94)}}
+@keyframes a-entre-carte{0%{opacity:0;transform:translateY(18px) scale(.97)}100%{opacity:1;transform:none}}
+@keyframes a-pop{0%{transform:scale(1)}45%{transform:scale(1.35)}100%{transform:scale(1)}}
+@keyframes a-enfonce{0%{scale:1}50%{scale:.97}100%{scale:1}}
+@keyframes a-veille{0%,100%{opacity:.35;transform:scale(1)}50%{opacity:1;transform:scale(1.015)}}
+@keyframes a-voile{from{opacity:0}to{opacity:1}}
+@keyframes a-tampon-buzz{0%{opacity:0;transform:scale(1.7)}60%{opacity:1;transform:scale(.92)}100%{transform:scale(1)}}
+@keyframes a-battement{0%{transform:scale(1.14)}100%{transform:scale(1)}}
+@keyframes a-halo{0%{opacity:1}100%{opacity:.15}}
+@keyframes a-monte{from{transform:scaleX(0)}}
+@keyframes a-podium{0%{opacity:0;transform:translateY(40px)}100%{opacity:1;transform:none}}
+@keyframes a-confettis{0%{opacity:1;transform:translateY(0) rotate(0)}100%{opacity:0;transform:translateY(360px) rotate(540deg)}}
+@keyframes a-secousse{0%,100%{transform:none}20%{transform:translateX(-8px)}40%{transform:translateX(8px)}60%{transform:translateX(-5px)}80%{transform:translateX(5px)}}
+@keyframes a-sautille{0%,100%{transform:translateY(0);opacity:.5}40%{transform:translateY(-6px);opacity:1}}
+@keyframes a-tourne{to{transform:rotate(360deg)}}
+
+@media (prefers-reduced-motion:reduce){
+  *,*::before,*::after{animation-duration:1ms!important;animation-iteration-count:1!important;transition-duration:1ms!important;animation-delay:0ms!important}
+  .flotte-lente,.points-attente i,.tourne,.btn-go,.buzzer::before{animation:none!important}
+  .confettis{display:none}
+  .fin-proche .chrono-chiffres{animation:none!important}
+  .ecran.fin-proche::after{animation:none!important;opacity:1}
+  .chrono-reste{transition:none!important}
+}
+</style>
+</head>
+<body>
+
+<svg width="0" height="0" class="vh" aria-hidden="true">
+  <defs>
+    <symbol id="i-coche" viewBox="0 0 24 24"><path d="M5 12.5l4.5 4.5L19 7.5" fill="none" stroke="currentColor" stroke-width="3.2" stroke-linecap="round" stroke-linejoin="round"/></symbol>
+    <symbol id="i-croix" viewBox="0 0 24 24"><path d="M6 6l12 12M18 6L6 18" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round"/></symbol>
+    <symbol id="i-passer" viewBox="0 0 24 24"><g fill="none" stroke="currentColor" stroke-width="2.8" stroke-linecap="round" stroke-linejoin="round"><path d="M14 6l-6 6 6 6"/><path d="M20 6l-6 6 6 6" opacity=".45"/></g></symbol>
+    <symbol id="i-copier" viewBox="0 0 24 24"><g fill="none" stroke="currentColor" stroke-width="2.4" stroke-linejoin="round"><rect x="8" y="8" width="12" height="12" rx="3"/><path d="M16 8V6a2 2 0 0 0-2-2H6a2 2 0 0 0-2 2v8a2 2 0 0 0 2 2h2"/></g></symbol>
+    <symbol id="i-retour" viewBox="0 0 24 24"><path d="M15 5l-7 7 7 7" fill="none" stroke="currentColor" stroke-width="2.8" stroke-linecap="round" stroke-linejoin="round"/></symbol>
+    <symbol id="i-de" viewBox="0 0 24 24"><g fill="none" stroke="currentColor" stroke-width="2.2" stroke-linejoin="round"><rect x="4" y="4" width="16" height="16" rx="4"/></g><g fill="currentColor"><circle cx="9" cy="9" r="1.6"/><circle cx="15" cy="15" r="1.6"/><circle cx="15" cy="9" r="1.6"/><circle cx="9" cy="15" r="1.6"/></g></symbol>
+    <symbol id="i-bulle" viewBox="0 0 24 24"><path d="M4 6a3 3 0 0 1 3-3h10a3 3 0 0 1 3 3v7a3 3 0 0 1-3 3h-6l-5 4v-4a3 3 0 0 1-2-3Z" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linejoin="round"/><path d="M8 8.5h8M8 12h5" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"/></symbol>
+    <symbol id="i-oeil" viewBox="0 0 24 24"><g fill="none" stroke="currentColor" stroke-width="2.4"><path d="M2 12s3.6-7 10-7 10 7 10 7-3.6 7-10 7S2 12 2 12Z"/><circle cx="12" cy="12" r="3"/></g></symbol>
+    <symbol id="i-oreille" viewBox="0 0 24 24"><g fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><path d="M7 9a5 5 0 1 1 10 0c0 3-3 4-3 7a3 3 0 0 1-6 0"/><path d="M10 9a2 2 0 1 1 4 0"/></g></symbol>
+    <symbol id="i-sens-interdit" viewBox="0 0 24 24"><g fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round"><circle cx="12" cy="12" r="9"/><path d="M7.5 12h9"/></g></symbol>
+    <symbol id="i-buzz" viewBox="0 0 24 24"><g fill="none" stroke="currentColor" stroke-width="2.3" stroke-linecap="round" stroke-linejoin="round"><path d="M5 17h14v3H5z"/><path d="M7 17a5 5 0 0 1 10 0"/><path d="M12 3v3M5.5 5.5l2 2M18.5 5.5l-2 2"/></g></symbol>
+    <symbol id="i-info" viewBox="0 0 24 24"><g fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round"><circle cx="12" cy="12" r="9"/><path d="M12 11v6M12 7.5v.5"/></g></symbol>
+    <symbol id="i-loupe" viewBox="0 0 24 24"><g fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round"><circle cx="10.5" cy="10.5" r="6.5"/><path d="M15.5 15.5 21 21"/><path d="M8.5 8.5l4 4M12.5 8.5l-4 4"/></g></symbol>
+    <symbol id="i-groupe" viewBox="0 0 24 24"><g fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><circle cx="9" cy="8" r="3.5"/><path d="M2.5 20a6.5 6.5 0 0 1 13 0"/><circle cx="17" cy="9" r="2.5"/><path d="M17 14a5 5 0 0 1 4.5 5"/></g></symbol>
+    <symbol id="i-wifi" viewBox="0 0 24 24"><g fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round"><path d="M2 8.5a15 15 0 0 1 20 0M5.5 12a10 10 0 0 1 13 0M9 15.5a5 5 0 0 1 6 0"/><circle cx="12" cy="19" r="1.2" fill="currentColor"/><path d="M3 3l18 18"/></g></symbol>
+    <symbol id="i-recharge" viewBox="0 0 24 24"><g fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round"><path d="M20 12a8 8 0 1 1-2.3-5.6"/><path d="M20 4v5h-5"/></g></symbol>
+    <symbol id="i-couronne" viewBox="0 0 24 24"><path d="M3 8l4.5 4L12 5l4.5 7L21 8l-2 11H5Z" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linejoin="round"/></symbol>
+  </defs>
+</svg>
+
+<main class="maquette">
+
+<!-- ============================================================ 1. ACCUEIL -->
+<section class="ecran" id="ecran-accueil" aria-labelledby="titre-jeu">
+  <div class="cadre-photo flotte-lente">
+    <div class="emplacement-image ratio-4-3" id="image-accueil" data-image="accueil" role="img" aria-label="Une rivière calme semée de galets, à la nuit tombante"><img src="images/accueil.jpg" alt="" style="width:100%;height:100%;object-fit:cover;display:block">
+    </div>
+  </div>
+  <div>
+    <h1 class="wordmark" id="titre-jeu" aria-label="Chut !">
+      <span class="galet" style="--i:0" aria-hidden="true">C</span><span class="galet" style="--i:1" aria-hidden="true">H</span><span class="galet" style="--i:2" aria-hidden="true">U</span><span class="galet" style="--i:3" aria-hidden="true">T</span><span class="galet citron" style="--i:4" aria-hidden="true">!</span>
+    </h1>
+    <p class="sous-titre-jeu">Un mot de trop, et c'est le buzz</p>
+    <p class="accroche">Faites deviner un mot de la Bible sans dire les cinq mots interdits. Les adversaires ont le doigt sur le buzzer.</p>
+  </div>
+  <div class="bas">
+    <button class="btn btn-action" id="btn-creer" type="button">Créer une partie</button>
+    <button class="btn btn-carte" id="btn-rejoindre" type="button">Rejoindre</button>
+    <button class="btn btn-lien" id="btn-regles" type="button">Règles du jeu</button>
+    <p class="mention-bas">En équipes, chacun sur son téléphone · de 4 à 16 personnes</p>
+  </div>
+</section>
+
+<!-- ============================================================ 2. ENTRÉE -->
+<section class="ecran mode-rejoindre" id="ecran-entree" aria-labelledby="titre-entree">
+  <div class="barre">
+    <button class="btn-rond" id="btn-retour-accueil" type="button" aria-label="Retour à l'accueil"><svg><use href="#i-retour"/></svg></button>
+  </div>
+  <div>
+    <h2 class="h-ecran" id="titre-entree"><span class="txt-creer">Créer une partie</span><span class="txt-rejoindre">Rejoindre une partie</span></h2>
+    <p class="sous"><span class="txt-creer">Vous serez l'hôte : vous réglerez la partie et la lancerez.</span><span class="txt-rejoindre">Demandez le code à l'hôte de la partie.</span></p>
+  </div>
+  <form id="form-entree" class="plateau form-entree" novalidate>
+    <div class="champ">
+      <label for="champ-prenom">Votre prénom</label>
+      <input class="saisie" id="champ-prenom" name="prenom" type="text" maxlength="16" autocomplete="given-name" placeholder="Ex. Inès" value="Inès">
+    </div>
+    <div class="champ" id="champ-code-bloc">
+      <label for="champ-code">Code de la partie</label>
+      <input class="saisie saisie-code" id="champ-code" name="code" type="text" maxlength="4" autocomplete="off" autocapitalize="characters" spellcheck="false" placeholder="····" value="CHUT" aria-describedby="aide-code">
+      <p class="aide" id="aide-code">4 lettres, affichées sur l'écran de l'hôte.</p>
+    </div>
+  </form>
+  <div class="bas">
+    <button class="btn btn-action" id="btn-entrer" type="submit" form="form-entree"><span class="txt-creer">Créer la partie</span><span class="txt-rejoindre">Entrer dans la partie</span></button>
+  </div>
+</section>
+
+<!-- ============================================================ 3. SALLE D'ATTENTE -->
+<section class="ecran est-hote repartition-hasard" id="ecran-attente" aria-labelledby="titre-attente">
+  <div class="barre">
+    <button class="btn-rond" id="btn-quitter-salle" type="button" aria-label="Quitter la salle"><svg><use href="#i-retour"/></svg></button>
+    <span class="titre-barre" id="titre-attente">Salle d'attente</span>
+  </div>
+
+  <div class="plateau-carte bloc-code">
+    <div class="etiquette">Code à partager</div>
+    <div class="code-geant" id="code-partie" data-role="code" aria-label="Code J O R D"><span>J</span><span>O</span><span>R</span><span>D</span></div>
+    <button class="btn btn-encre" id="btn-copier-code" type="button"><svg><use href="#i-copier"/></svg> Copier le code</button>
+  </div>
+
+  <!-- Réglages : modifiables par l'hôte -->
+  <div class="plateau" id="reglages-hote">
+    <div class="tete-liste"><h2>Réglages</h2><span class="compte">hôte seulement</span></div>
+    <div class="reglage">
+      <div class="lib"><span class="lib-reglage" id="lib-equipes">Équipes</span><small>De 2 à 4</small></div>
+      <div class="pas" id="reglage-equipes" role="group" aria-labelledby="lib-equipes">
+        <button type="button" id="equipes-moins" aria-label="Une équipe de moins">−</button>
+        <span class="valeur" id="equipes-valeur" aria-live="polite">4</span>
+        <button type="button" id="equipes-plus" aria-label="Une équipe de plus" disabled>+</button>
+      </div>
+    </div>
+    <div class="reglage-col">
+      <span class="lib-reglage" id="lib-duree">Durée d'un tour</span>
+      <div class="segments" id="reglage-duree" role="radiogroup" aria-labelledby="lib-duree">
+        <label><input type="radio" name="duree" value="45"><span>45 s</span></label>
+        <label><input type="radio" name="duree" value="60" checked><span>60 s</span></label>
+        <label><input type="radio" name="duree" value="90"><span>90 s</span></label>
+      </div>
+    </div>
+    <div class="reglage-col">
+      <span class="lib-reglage" id="lib-tours">Tours par personne</span>
+      <small>Chacun fait deviner une ou deux fois.</small>
+      <div class="segments n2" id="reglage-tours" role="radiogroup" aria-labelledby="lib-tours">
+        <label><input type="radio" name="tours" value="1" checked><span>1 fois</span></label>
+        <label><input type="radio" name="tours" value="2"><span>2 fois</span></label>
+      </div>
+    </div>
+    <div class="reglage-col">
+      <span class="lib-reglage" id="lib-difficulte">Difficulté</span>
+      <div class="segments n4" id="reglage-difficulte" role="radiogroup" aria-labelledby="lib-difficulte">
+        <label><input type="radio" name="difficulte" value="toutes" checked><span>Toutes</span></label>
+        <label><input type="radio" name="difficulte" value="facile"><span>Facile</span></label>
+        <label><input type="radio" name="difficulte" value="moyen"><span>Moyen</span></label>
+        <label><input type="radio" name="difficulte" value="difficile"><span>Difficile</span></label>
+      </div>
+    </div>
+    <div class="reglage-col">
+      <span class="lib-reglage" id="lib-repartition">Répartition des équipes</span>
+      <div class="segments n2" id="reglage-repartition" role="radiogroup" aria-labelledby="lib-repartition">
+        <label><input type="radio" name="repartition" value="hasard" checked><span>Au hasard</span></label>
+        <label><input type="radio" name="repartition" value="choix"><span>Au choix</span></label>
+      </div>
+    </div>
+  </div>
+
+  <!-- Réglages : lecture seule pour les invités -->
+  <div class="plateau" id="resume-reglages-invite">
+    <div class="tete-liste"><h2>La partie</h2><span class="compte">réglée par l'hôte</span></div>
+    <ul class="resume-reglages" data-role="resume-reglages">
+      <li><span>Équipes</span> 4</li><li><span>Tour</span> 60 s</li><li><span>Chacun fait deviner</span> 1 fois</li><li><span>Difficulté</span> toutes</li><li><span>Répartition</span> <span data-role="txt-repartition">au hasard</span></li>
+    </ul>
+  </div>
+
+  <div class="plateau">
+    <div class="tete-liste"><h2>Équipes</h2><span class="compte" id="nb-joueurs">9 personnes sur 16</span></div>
+    <div class="equipes" id="equipes">
+      <div class="equipe" data-equipe="e1" style="--e:var(--e1)">
+        <div class="equipe-tete"><strong data-role="nom-equipe">Équipe 1</strong><span class="nb" data-role="nb">2</span></div>
+        <span class="mienne">Votre équipe</span>
+        <ul class="liste-membres" data-role="membres">
+          <li class="joueur est-hote" data-joueur="sarah"><span class="pastille petite" style="--j:var(--j1)">S</span><span class="nom">Sarah</span><span class="badges"><span class="badge badge-hote">Hôte</span></span></li>
+          <li class="joueur" data-joueur="maelle"><span class="pastille petite" style="--j:var(--j6)">M</span><span class="nom">Maëlle</span></li>
+        </ul>
+        <button class="btn btn-second btn-choisir-equipe" type="button" data-equipe="e1">Rejoindre</button>
+      </div>
+      <div class="equipe est-mienne" data-equipe="e2" style="--e:var(--e2)">
+        <div class="equipe-tete"><strong data-role="nom-equipe">Équipe 2</strong><span class="nb" data-role="nb">2</span></div>
+        <span class="mienne">Votre équipe</span>
+        <ul class="liste-membres" data-role="membres">
+          <li class="joueur est-moi" data-joueur="ines"><span class="pastille petite" style="--j:var(--j5)">I</span><span class="nom">Inès</span><span class="badges"><span class="badge badge-vous">Vous</span></span></li>
+          <li class="joueur" data-joueur="gabriel"><span class="pastille petite" style="--j:var(--j4)">G</span><span class="nom">Gabriel</span></li>
+        </ul>
+        <button class="btn btn-second btn-choisir-equipe" type="button" data-equipe="e2">Rejoindre</button>
+      </div>
+      <div class="equipe" data-equipe="e3" style="--e:var(--e3)">
+        <div class="equipe-tete"><strong data-role="nom-equipe">Équipe 3</strong><span class="nb" data-role="nb">2</span></div>
+        <span class="mienne">Votre équipe</span>
+        <ul class="liste-membres" data-role="membres">
+          <li class="joueur deconnecte" data-joueur="noah"><span class="pastille petite" style="--j:var(--j3)">N</span><span class="nom">Noah</span><span class="badges"><span class="badge badge-off">hors ligne</span></span></li>
+          <li class="joueur vient-d-arriver" data-joueur="elisabeth"><span class="pastille petite" style="--j:var(--j8)">É</span><span class="nom">Élisabeth-Marie</span></li>
+        </ul>
+        <button class="btn btn-second btn-choisir-equipe" type="button" data-equipe="e3">Rejoindre</button>
+      </div>
+      <div class="equipe incomplete" data-equipe="e4" style="--e:var(--e4)">
+        <div class="equipe-tete"><strong data-role="nom-equipe">Équipe 4</strong><span class="nb" data-role="nb">1</span></div>
+        <span class="mienne">Votre équipe</span>
+        <ul class="liste-membres" data-role="membres">
+          <li class="joueur" data-joueur="lydie"><span class="pastille petite" style="--j:var(--j2)">L</span><span class="nom">Lydie</span></li>
+        </ul>
+        <span class="manque" data-role="manque">Il manque 1 personne</span>
+        <button class="btn btn-second btn-choisir-equipe" type="button" data-equipe="e4">Rejoindre</button>
+      </div>
+    </div>
+    <div class="sans-equipe" id="sans-equipe">
+      <div class="etiquette">Sans équipe</div>
+      <ul class="liste-membres" data-role="sans-equipe">
+        <li class="joueur" data-joueur="elie"><span class="pastille petite" style="--j:var(--j9)">É</span><span class="nom">Élie</span></li>
+        <li class="joueur" data-joueur="joachim"><span class="pastille petite" style="--j:var(--j10)">J</span><span class="nom">Joachim-Emmanuel</span></li>
+      </ul>
+    </div>
+    <p class="note" id="note-hasard"><svg><use href="#i-de"/></svg><span>Les équipes sont tirées au sort au lancement. L'hôte peut mélanger avant pour voir.</span></p>
+    <p class="note" id="note-choix">Touchez «&nbsp;Rejoindre&nbsp;» sous l'équipe de votre choix. Au moins 2 personnes par équipe.</p>
+  </div>
+
+  <div class="bas">
+    <div class="attente" id="attente-invite">
+      <span class="points-attente" aria-hidden="true"><i></i><i></i><i></i></span>
+      <p><strong>En attente de l'hôte</strong><span data-role="attente-texte">Sarah lancera la partie quand tout le monde sera là.</span></p>
+    </div>
+    <button class="btn btn-second" id="btn-melanger" type="button"><svg><use href="#i-de"/></svg> Mélanger les équipes</button>
+    <button class="btn btn-action" id="btn-lancer" type="button">Lancer la partie</button>
+    <p class="note-lancer" id="raison-lancer" data-role="raison-lancer"></p>
+  </div>
+</section>
+
+<!-- ============================================================ 4. ON Y VA ? -->
+<section class="ecran role-parleur" id="ecran-pret" aria-labelledby="titre-pret">
+  <div class="barre">
+    <span class="puce"><span data-role="ronde">Ronde 2 sur 4</span></span>
+    <div class="droite"><span class="puce puce-equipe" style="--e:var(--e2)" data-role="equipe-du-tour">Équipe 2</span></div>
+  </div>
+
+  <!-- Vue de qui fait deviner -->
+  <div class="vue vue-parleur">
+    <h2 class="grand-titre" id="titre-pret">À vous de<br>faire deviner</h2>
+    <p class="sous">Tenez le téléphone pour que votre équipe ne voie pas l'écran.</p>
+    <button class="btn-go" id="btn-go" type="button">Go</button>
+    <div class="rappel rouge"><svg><use href="#i-sens-interdit"/></svg><p><strong>Ni le mot, ni les 5 interdits</strong>, ni un mot de leur famille, ni un geste. <span data-role="duree">60 s</span></p></div>
+    <label class="ligne-interrupteur"><span>Trouvé à gauche<small>Pour jouer de la main gauche</small></span><span class="interrupteur"><input type="checkbox" role="switch" id="reglage-gaucher"><span class="rail"></span><span class="bouton"></span></span></label>
+  </div>
+
+  <!-- Vue de son équipe -->
+  <div class="vue vue-equipe">
+    <div class="qui-parle"><span class="pastille grande" style="--j:var(--j4)">G</span><span class="prenom" data-role="nom-parleur">Gabriel</span></div>
+    <h2 class="grand-titre">Préparez-vous<br>à deviner</h2>
+    <p class="sous">Gabriel lance le chrono. Criez vos réponses !</p>
+    <div class="secours"><button class="btn btn-action" id="btn-go-secours" type="button">Lancer à sa place</button><p class="sous">Gabriel est hors ligne. En tant qu'hôte, vous pouvez lancer le tour pour l'équipe.</p></div>
+    <div class="attente"><span class="points-attente" aria-hidden="true"><i></i><i></i><i></i></span><p><strong>En attente du Go</strong>Le tour commence quand Gabriel touche «&nbsp;Go&nbsp;».</p></div>
+  </div>
+
+  <!-- Vue des adversaires -->
+  <div class="vue vue-adverse">
+    <div class="qui-parle"><span class="pastille grande" style="--j:var(--j4)">G</span><span class="prenom">Gabriel</span></div>
+    <h2 class="grand-titre">À vous<br>de surveiller</h2>
+    <p class="sous">Vous verrez la carte et ses mots interdits. Une faute ? Buzzez : +1 pour votre équipe.</p>
+    <div class="attente"><span class="points-attente" aria-hidden="true"><i></i><i></i><i></i></span><p><strong>En attente du Go</strong>Gabriel va faire deviner pour l'Équipe 2.</p></div>
+  </div>
+</section>
+
+<!-- ============================================================ 6a. TOUR · QUI FAIT DEVINER -->
+<section class="ecran" id="ecran-tour-parleur" aria-labelledby="titre-tour-parleur">
+  <h2 class="vh" id="titre-tour-parleur">Faites deviner</h2>
+  <div class="barre">
+    <span class="puce puce-equipe" style="--e:var(--e2)" data-role="equipe-du-tour">Équipe 2</span>
+    <div class="droite compteurs">
+      <span class="compteur c-trouve"><svg><use href="#i-coche"/></svg><b data-role="nb-trouvees">4</b><span class="vh">trouvées</span></span>
+      <span class="compteur c-buzz"><svg><use href="#i-buzz"/></svg><b data-role="nb-buzzees">1</b><span class="vh">buzzées</span></span>
+    </div>
+  </div>
+  <div class="chrono" data-role="chrono" role="timer" aria-label="Temps restant">
+    <div class="chrono-ligne"><span class="chrono-chiffres" data-role="secondes">23</span><span class="chrono-unite">s</span></div>
+    <div class="chrono-rail"><span class="chrono-reste" data-role="reste" style="--reste:.38"></span></div>
+    <span class="chrono-alerte">Dernières secondes</span>
+  </div>
+  <div class="zone-carte">
+    <div class="carte-jeu" id="carte-tour" data-role="carte" aria-live="polite">
+      <div class="carte-tete"><span class="filet-mot" aria-hidden="true"></span><span class="mot-carte" data-role="mot">Moïse</span></div>
+      <ul class="interdits" data-role="interdits" aria-label="Mots interdits">
+        <li>Égypte</li><li>Mer Rouge</li><li>Tables de la Loi</li><li>Pharaon</li><li>Buisson</li>
+      </ul>
+    </div>
+  </div>
+  <p class="note-derniere">Dernière carte : on ne peut plus passer.</p>
+  <div class="duo-pouce">
+    <button class="btn btn-pouce btn-passer" id="btn-passer" type="button"><svg><use href="#i-passer"/></svg>Passer</button>
+    <button class="btn btn-pouce btn-trouve" id="btn-trouve" type="button"><svg><use href="#i-coche"/></svg>Trouvé</button>
+  </div>
+</section>
+
+<!-- ============================================================ 6b. TOUR · SON ÉQUIPE -->
+<section class="ecran" id="ecran-tour-equipe" aria-labelledby="titre-devinez">
+  <div class="barre">
+    <span class="puce"><svg><use href="#i-oreille"/></svg>Vous devinez</span>
+    <div class="droite"><span class="puce puce-equipe" style="--e:var(--e2)">Équipe 2 · vous</span></div>
+  </div>
+  <div>
+    <h2 class="devinez" id="titre-devinez">Devinez !</h2>
+    <p class="consigne-equipe"><span data-role="nom-parleur">Gabriel</span> fait deviner. Criez vos réponses.</p>
+  </div>
+  <div class="chrono chrono-geant" data-role="chrono" role="timer" aria-label="Temps restant">
+    <div class="chrono-ligne"><span class="chrono-chiffres" data-role="secondes">23</span><span class="chrono-unite">s</span></div>
+    <div class="chrono-rail"><span class="chrono-reste" data-role="reste" style="--reste:.38"></span></div>
+    <span class="chrono-alerte">Dernières secondes</span>
+  </div>
+  <div class="compteurs-grands">
+    <div class="compteur-grand c-trouve"><b data-role="nb-trouvees">4</b><span>trouvées</span></div>
+    <div class="compteur-grand c-buzz"><b data-role="nb-buzzees">1</b><span>buzzées</span></div>
+  </div>
+</section>
+
+<!-- ============================================================ 6c. TOUR · ADVERSAIRES -->
+<section class="ecran" id="ecran-tour-adverse" aria-labelledby="titre-buzzer">
+  <div class="barre">
+    <span class="puce"><svg><use href="#i-oeil"/></svg>Vous surveillez</span>
+    <div class="droite"><span class="puce puce-equipe" style="--e:var(--e2)" data-role="equipe-du-tour">Équipe 2 joue</span></div>
+  </div>
+  <div class="chrono" data-role="chrono" role="timer" aria-label="Temps restant">
+    <div class="chrono-ligne"><span class="chrono-chiffres" data-role="secondes">23</span><span class="chrono-unite">s</span></div>
+    <div class="chrono-rail"><span class="chrono-reste" data-role="reste" style="--reste:.38"></span></div>
+    <span class="chrono-alerte">Dernières secondes</span>
+  </div>
+  <div class="carte-jeu" id="carte-surveillance" data-role="carte">
+    <div class="carte-tete"><span class="mot-carte" data-role="mot">Moïse</span></div>
+    <ul class="interdits" data-role="interdits" aria-label="Mots interdits">
+      <li>Égypte</li><li>Mer Rouge</li><li>Tables de la Loi</li><li>Pharaon</li><li>Buisson</li>
+    </ul>
+  </div>
+  <button class="buzzer" id="btn-buzzer" type="button" aria-describedby="aide-buzz">
+    <span class="mot-buzz" id="titre-buzzer">BUZZ</span>
+    <span class="aide-buzz" id="aide-buzz">Mot interdit, mot de la famille ou geste</span>
+  </button>
+</section>
+
+<!-- ============================================================ 6d. VOILE DU BUZZ -->
+<div class="voile-buzz" id="voile-buzz" role="alert" aria-live="assertive">
+  <div class="voile-contenu">
+    <div class="disque-buzz" aria-hidden="true">BUZZ</div>
+    <p class="voile-titre">
+      <span class="t-vue t-tous">Carte perdue</span>
+      <span class="t-vue t-buzzeur">Bien vu !</span>
+      <span class="t-vue t-parleur">Buzz sur votre carte</span>
+      <span class="t-vue t-trop-tard">Trop tard</span>
+    </p>
+    <p class="voile-qui">
+      <span class="t-vue t-tous t-parleur"><b data-role="nom-buzzeur">Lydie</b> a buzzé :</span>
+      <span class="t-vue t-buzzeur">Vous avez buzzé :</span>
+      <span class="t-vue t-trop-tard"><b data-role="nom-buzzeur">Lydie</b> a buzzé avant vous :</span>
+      <span class="puce puce-equipe" style="--e:var(--e4)" data-role="equipe-buzzeur">+1 Équipe 4</span>
+    </p>
+    <div class="voile-mot"><span class="etiquette">Le mot était</span><b data-role="mot-perdu">Moïse</b></div>
+    <p class="voile-suite">Carte suivante… le chrono continue.</p>
+  </div>
+</div>
+
+<!-- ============================================================ 7. FIN DU TOUR -->
+<section class="ecran est-hote" id="ecran-fin-tour" aria-labelledby="titre-fin-tour">
+  <div class="barre"><span class="titre-barre" id="titre-fin-tour">Temps écoulé !</span><div class="droite"><span class="puce puce-equipe" style="--e:var(--e2)" data-role="equipe-du-tour">Équipe 2</span></div></div>
+  <div class="points-tour">
+    <span class="plus" data-role="points-tour">+5</span>
+    <span class="sous"><span data-role="nom-parleur">Gabriel</span> a fait trouver <span data-role="nb-trouvees-texte">5 cartes</span></span>
+    <ul class="gains-adverses" data-role="gains-adverses" aria-label="Points gagnés au buzzer">
+      <li><span class="puce puce-equipe" style="--e:var(--e4)">+1 Équipe 4</span></li>
+      <li><span class="puce puce-equipe" style="--e:var(--e1)">+1 Équipe 1</span></li>
+    </ul>
+  </div>
+  <div class="groupe-cartes g-trouvees">
+    <h3><svg><use href="#i-coche"/></svg>Trouvées <span class="n" data-role="n-trouvees">5</span></h3>
+    <ul class="puces-cartes" data-role="cartes-trouvees">
+      <li style="--i:0">L'arche de Noé</li><li style="--i:1">Zachée</li><li style="--i:2">Goliath</li><li style="--i:3">Les murailles de Jéricho</li><li style="--i:4">Le fils prodigue</li>
+    </ul>
+  </div>
+  <p class="aucune">Aucune carte trouvée ce tour. La prochaine sera la bonne !</p>
+  <div class="groupe-cartes g-buzzees" data-role="groupe-buzzees">
+    <h3><svg><use href="#i-buzz"/></svg>Buzzées <span class="n" data-role="n-buzzees">2</span></h3>
+    <ul class="puces-cartes" data-role="cartes-buzzees">
+      <li style="--i:5">Moïse <small>par Lydie</small></li><li style="--i:6">Samson <small>par Sarah</small></li>
+    </ul>
+  </div>
+  <div class="groupe-cartes g-passees" data-role="groupe-passees">
+    <h3><svg><use href="#i-passer"/></svg>Passées <span class="n" data-role="n-passees">1</span></h3>
+    <ul class="puces-cartes" data-role="cartes-passees"><li style="--i:7">Melchisédek</li></ul>
+  </div>
+  <div class="tete-score">
+    <h3 class="titre-score" id="titre-score">Le score</h3>
+    <span class="etiquette" data-role="avancement">Ronde 2 sur 4</span>
+  </div>
+  <div class="rail-tours" aria-hidden="true"><i style="--part:.5"></i></div>
+  <ol class="classement" id="classement" aria-labelledby="titre-score">
+    <li class="ligne-score en-tete" data-equipe="e2" style="--e:var(--e2)"><span class="rang">1</span><span class="milieu"><span class="nom-eq"><span class="pastille-eq"></span>Équipe 2 <span class="tag"><svg width="14" height="14"><use href="#i-couronne"/></svg>&nbsp;En tête</span></span><span class="barre-score"><i style="--part:1;--i:0"></i></span></span><span class="pts"><b>9</b><small>+5 ce tour</small></span></li>
+    <li class="ligne-score" data-equipe="e1" style="--e:var(--e1)"><span class="rang">2</span><span class="milieu"><span class="nom-eq"><span class="pastille-eq"></span>Équipe 1 <span class="tag">En tête</span></span><span class="barre-score"><i style="--part:.78;--i:1"></i></span></span><span class="pts"><b>7</b><small>+1 au buzzer</small></span></li>
+    <li class="ligne-score" data-equipe="e4" style="--e:var(--e4)"><span class="rang">3</span><span class="milieu"><span class="nom-eq"><span class="pastille-eq"></span>Équipe 4 <span class="tag">En tête</span></span><span class="barre-score"><i style="--part:.56;--i:2"></i></span></span><span class="pts"><b>5</b><small>+1 au buzzer</small></span></li>
+    <li class="ligne-score" data-equipe="e3" style="--e:var(--e3)"><span class="rang">4</span><span class="milieu"><span class="nom-eq"><span class="pastille-eq"></span>Équipe 3 <span class="tag">En tête</span></span><span class="barre-score"><i style="--part:.33;--i:3"></i></span></span><span class="pts"><b>3</b><small>+0 ce tour</small></span></li>
+  </ol>
+  <div class="prochain" id="prochain"><span class="pastille" style="--j:var(--j8)">É</span><p><span class="etiquette">Prochain tour</span><strong data-role="prochain-parleur">Élisabeth-Marie</strong>fait deviner pour l'<span data-role="prochaine-equipe">Équipe 3</span></p></div>
+  <p class="partie-finie"><span data-role="raison-fin">C'était le dernier tour.</span> Place au podium !</p>
+  <div class="bas">
+    <button class="btn btn-action action-hote" id="btn-suite-tour" type="button"><span class="t-suite">Tour suivant</span><span class="t-podium">Voir le podium</span></button>
+    <div class="attente attente-invite"><span class="points-attente" aria-hidden="true"><i></i><i></i><i></i></span><p><strong>En attente de l'hôte</strong><span class="t-suite">Sarah lance le tour suivant.</span><span class="t-podium">Sarah ouvre le podium.</span></p></div>
+  </div>
+</section>
+
+<!-- ============================================================ 9. FIN DE PARTIE -->
+<section class="ecran est-hote" id="ecran-fin" aria-labelledby="titre-fin">
+  <div class="confettis" id="confettis" aria-hidden="true"></div>
+  <h2 class="titre-fin" id="titre-fin"><span class="t-victoire">Victoire de<span class="gagnante" data-role="equipe-gagnante">l'Équipe 2</span></span><span class="t-egalite">Égalité !<span class="gagnante" data-role="equipes-ex-aequo">Équipes 2 et 1</span></span></h2>
+  <div class="podium n4" id="podium">
+    <div class="marche r2" data-equipe="e1" style="--e:var(--e1);--i:1"><span class="eq">Équipe 1</span><div class="bloc"><span class="r">2</span><span class="p">21 pts</span></div></div>
+    <div class="marche r1" data-equipe="e2" style="--e:var(--e2);--i:2"><span class="eq">Équipe 2</span><div class="bloc"><span class="r">1</span><span class="p">24 pts</span></div></div>
+    <div class="marche r3" data-equipe="e4" style="--e:var(--e4);--i:0"><span class="eq">Équipe 4</span><div class="bloc"><span class="r">3</span><span class="p">17 pts</span></div></div>
+  </div>
+  <ol class="hors-podium" id="hors-podium" start="4">
+    <li style="--e:var(--e3)"><span class="pastille-eq"></span><span>4<sup>e</sup> · Équipe 3</span><b>12</b></li>
+  </ol>
+  <h3 class="titre-detail" id="titre-detail">D'où viennent les points</h3>
+  <div class="defile-table">
+    <table class="detail" id="detail-points" aria-labelledby="titre-detail">
+      <thead><tr><th scope="col">Équipe</th><th scope="col">Trouvées</th><th scope="col">Buzzer</th><th scope="col">Total</th></tr></thead>
+      <tbody>
+        <tr style="--e:var(--e2)"><th scope="row"><span class="pastille-eq"></span>Équipe 2</th><td>19</td><td>5</td><td class="total">24</td></tr>
+        <tr style="--e:var(--e1)"><th scope="row"><span class="pastille-eq"></span>Équipe 1</th><td>15</td><td>6</td><td class="total">21</td></tr>
+        <tr style="--e:var(--e4)"><th scope="row"><span class="pastille-eq"></span>Équipe 4</th><td>13</td><td>4</td><td class="total">17</td></tr>
+        <tr style="--e:var(--e3)"><th scope="row"><span class="pastille-eq"></span>Équipe 3</th><td>9</td><td>3</td><td class="total">12</td></tr>
+      </tbody>
+    </table>
+  </div>
+  <div class="bas">
+    <button class="btn btn-action action-hote" id="btn-rejouer" type="button">Rejouer</button>
+    <div class="attente attente-invite" id="attente-rejouer"><span class="points-attente" aria-hidden="true"><i></i><i></i><i></i></span><p><strong>Une revanche ?</strong>Si l'hôte relance, vous restez dans la partie.</p></div>
+    <button class="btn btn-second" id="btn-quitter" type="button">Quitter</button>
+  </div>
+</section>
+
+<!-- ============================================================ 10. RÈGLES -->
+<section class="ecran" id="ecran-regles" aria-labelledby="titre-regles">
+  <div class="barre">
+    <button class="btn-rond" id="btn-fermer-regles" type="button" aria-label="Fermer les règles"><svg><use href="#i-retour"/></svg></button>
+    <span class="titre-barre" id="titre-regles">Règles du jeu</span>
+  </div>
+  <div class="cadre-manche">
+    <div class="emplacement-image ratio-16-9" id="image-regles" data-image="regles" role="img" aria-label="Un index posé sur des lèvres closes, en lumière chaude"><img src="images/regles.jpg" alt="" style="width:100%;height:100%;object-fit:cover;display:block">
+    </div>
+  </div>
+  <div class="plateau regle">
+    <h3><span class="n">1</span>Les équipes</h3>
+    <p>De 2 à 4 équipes, au moins 2 personnes chacune, 16 au plus. Chacun rejoint la partie avec le code de l'hôte.</p>
+  </div>
+  <div class="plateau regle">
+    <h3><span class="n">2</span>La carte</h3>
+    <p>Un mot à faire deviner, et cinq mots interdits.</p>
+    <div class="carte-jeu exemple-carte" aria-hidden="true">
+      <div class="carte-tete"><span class="mot-carte">Noé</span></div>
+      <ul class="interdits"><li>Arche</li><li>Déluge</li><li>Animaux</li><li>Bateau</li><li>Colombe</li></ul>
+    </div>
+    <p>Interdit aussi : un mot de la même famille (« bateaux », « animal »), le traduire, le mimer.</p>
+  </div>
+  <div class="plateau regle">
+    <h3><span class="n">3</span>Un tour</h3>
+    <ul class="roles-regle">
+      <li><svg><use href="#i-bulle"/></svg><span><strong>Qui fait deviner</strong> touche «&nbsp;Trouvé&nbsp;» (1 point) ou «&nbsp;Passer&nbsp;» (carte perdue, sans point).</span></li>
+      <li><svg><use href="#i-oreille"/></svg><span><strong>Son équipe</strong> ne voit que le chrono, et devine à voix haute.</span></li>
+      <li><svg class="rouge"><use href="#i-buzz"/></svg><span><strong>Les adversaires</strong> voient la carte. À la moindre faute, ils buzzent : la carte est perdue et leur équipe gagne 1 point. Si deux personnes buzzent, seule la première compte.</span></li>
+    </ul>
+  </div>
+  <div class="plateau regle">
+    <h3><span class="n">4</span>La partie</h3>
+    <p>Les équipes jouent à tour de rôle, et ce n'est jamais la même personne qui fait deviner deux fois de suite. Quand chacun a fait deviner une fois (ou deux, selon le réglage), l'équipe qui a le plus de points gagne.</p>
+  </div>
+  <div class="bas"><button class="btn btn-action" id="btn-regles-ok" type="button">J'ai compris</button></div>
+</section>
+
+<!-- ============================================================ 11. ERREURS -->
+<section class="ecran" id="ecran-erreur" aria-labelledby="titre-erreurs">
+  <div class="barre"><span class="titre-barre" id="titre-erreurs">Un souci</span></div>
+  <div id="bandeau-connexion" class="bandeau" role="status"><svg><use href="#i-wifi"/></svg> Connexion perdue. Reconnexion en cours…</div>
+  <div id="toast-retard" class="bandeau" role="status"><svg><use href="#i-groupe"/></svg> <span>Partie en cours : vous rejoignez l'<b data-role="equipe-attribuee">Équipe 3</b>.</span></div>
+
+  <div class="plateau carte-erreur" id="erreur-code" data-erreur="code-introuvable" role="alert">
+    <span class="ico-erreur" aria-hidden="true"><svg><use href="#i-loupe"/></svg></span>
+    <h2>Code introuvable</h2>
+    <p>Aucune partie ne porte le code <span class="code-faux" data-role="code-saisi">JORF</span>. Vérifiez les 4 lettres auprès de l'hôte.</p>
+    <button class="btn btn-action" id="btn-ressaisir-code" type="button">Corriger le code</button>
+  </div>
+
+  <div class="plateau carte-erreur" id="erreur-complet" data-erreur="complet" role="alert">
+    <span class="ico-erreur" aria-hidden="true"><svg><use href="#i-groupe"/></svg></span>
+    <h2>Partie complète</h2>
+    <p>Cette partie réunit déjà 16 personnes, le maximum. Vous pouvez en créer une autre.</p>
+    <button class="btn btn-second" id="btn-erreur-accueil" type="button">Retour à l'accueil</button>
+  </div>
+
+  <div class="plateau carte-erreur" id="erreur-connexion" data-erreur="connexion-perdue" role="alert">
+    <span class="ico-erreur" aria-hidden="true"><svg class="tourne"><use href="#i-recharge"/></svg></span>
+    <h2>Connexion perdue</h2>
+    <p>Vérifiez le Wi-Fi ou les données mobiles. Nous essayons de vous reconnecter ; la partie vous attend.</p>
+    <button class="btn btn-action" id="btn-reessayer" type="button">Réessayer</button>
+  </div>
+</section>
+
+</main>
+
+
+<script src="https://cdn.jsdelivr.net/npm/peerjs@1.5.5/dist/peerjs.min.js"></script>
+<script>window.CARTES=[{"id":"t001","mot":"Adam","interdits":["Ève","Éden","fruit","premier homme","poussière"],"difficulte":"facile"},{"id":"t002","mot":"Ève","interdits":["Adam","serpent","fruit","côte","femme"],"difficulte":"facile"},{"id":"t003","mot":"Caïn","interdits":["Abel","frère","colère","tuer","signe"],"difficulte":"facile"},{"id":"t004","mot":"Abel","interdits":["Caïn","frère","berger","offrande","tué"],"difficulte":"facile"},{"id":"t005","mot":"Noé","interdits":["arche","déluge","animaux","pluie","bateau"],"difficulte":"facile"},{"id":"t006","mot":"Abraham","interdits":["Isaac","Sara","foi","étoiles","Our"],"difficulte":"facile"},{"id":"t007","mot":"Jacob","interdits":["Ésaü","Israël","Rachel","escalier","Joseph"],"difficulte":"facile"},{"id":"t008","mot":"Joseph (fils de Jacob)","interdits":["frères","rêves","Égypte","Pharaon","vendu"],"difficulte":"facile"},{"id":"t009","mot":"Moïse","interdits":["Égypte","Pharaon","mer Rouge","bâton","Loi"],"difficulte":"facile"},{"id":"t010","mot":"Josué","interdits":["Moïse","Jéricho","muraille","soleil","Canaan"],"difficulte":"facile"},{"id":"t011","mot":"Samson","interdits":["force","cheveux","lion","Dalila","Philistins"],"difficulte":"facile"},{"id":"t012","mot":"Ruth","interdits":["Noémi","Boaz","Moabite","belle-mère","glaner"],"difficulte":"facile"},{"id":"t013","mot":"Samuel","interdits":["Anne","Héli","prophète","Saül","appeler"],"difficulte":"facile"},{"id":"t014","mot":"David","interdits":["Goliath","fronde","roi","berger","harpe"],"difficulte":"facile"},{"id":"t015","mot":"Goliath","interdits":["géant","David","Philistin","fronde","pierre"],"difficulte":"facile"},{"id":"t016","mot":"Salomon","interdits":["sagesse","roi","temple","David","Proverbes"],"difficulte":"facile"},{"id":"t017","mot":"Élie","interdits":["Baal","feu","corbeaux","prophète","char"],"difficulte":"facile"},{"id":"t018","mot":"Jonas","interdits":["poisson","Ninive","bateau","tempête","prophète"],"difficulte":"facile"},{"id":"t019","mot":"Daniel","interdits":["lions","fosse","Babylone","prière","Darius"],"difficulte":"facile"},{"id":"t020","mot":"Esther","interdits":["reine","Mardochée","Aman","Assuérus","Juifs"],"difficulte":"facile"},{"id":"t021","mot":"Job","interdits":["Satan","endurance","souffrance","fils","amis"],"difficulte":"facile"},{"id":"t022","mot":"Marie (mère de Jésus)","interdits":["Joseph","Gabriel","Jésus","vierge","enceinte"],"difficulte":"facile"},{"id":"t023","mot":"Jean le Baptiseur","interdits":["Jourdain","criquets","miel","Hérode","désert"],"difficulte":"facile"},{"id":"t024","mot":"Pierre","interdits":["apôtre","pêcheur","coq","renier","clés"],"difficulte":"facile"},{"id":"t025","mot":"Zachée","interdits":["petit","arbre","impôts","Jéricho","riche"],"difficulte":"facile"},{"id":"t026","mot":"Lazare (ami de Jésus)","interdits":["Marthe","Béthanie","tombe","quatre jours","résurrection"],"difficulte":"facile"},{"id":"t027","mot":"Paul","interdits":["Saul","apôtre","Damas","lettres","aveugle"],"difficulte":"facile"},{"id":"t028","mot":"Judas Iscariote","interdits":["trahir","embrasser","argent","apôtre","pendre"],"difficulte":"facile"},{"id":"t029","mot":"Rébecca","interdits":["Isaac","chameaux","puits","Jacob","Ésaü"],"difficulte":"moyen"},{"id":"t030","mot":"Ésaü","interdits":["Jacob","jumeau","lentilles","chasseur","Édom"],"difficulte":"moyen"},{"id":"t031","mot":"Aaron","interdits":["Moïse","frère","grand prêtre","veau d’or","bâton"],"difficulte":"moyen"},{"id":"t032","mot":"Miriam","interdits":["Moïse","sœur","tambourin","lèpre","chanter"],"difficulte":"moyen"},{"id":"t033","mot":"Rahab","interdits":["Jéricho","espions","corde","fenêtre","prostituée"],"difficulte":"moyen"},{"id":"t034","mot":"Gédéon","interdits":["300 hommes","cors","peau de mouton","Madianites","jarres"],"difficulte":"moyen"},{"id":"t035","mot":"Dalila","interdits":["Samson","cheveux","Philistins","force","secret"],"difficulte":"moyen"},{"id":"t036","mot":"Saül","interdits":["roi","David","jaloux","lance","Jonathan"],"difficulte":"moyen"},{"id":"t037","mot":"Jonathan","interdits":["David","ami","Saül","fils","flèches"],"difficulte":"moyen"},{"id":"t038","mot":"Absalon","interdits":["cheveux","arbre","David","révolte","fils"],"difficulte":"moyen"},{"id":"t039","mot":"Élisée","interdits":["Élie","vêtement","prophète","Naamân","Jourdain"],"difficulte":"moyen"},{"id":"t040","mot":"Jézabel","interdits":["Achab","Baal","reine","Élie","fenêtre"],"difficulte":"moyen"},{"id":"t041","mot":"Nabuchodonosor","interdits":["Babylone","roi","statue","fournaise","rêve"],"difficulte":"moyen"},{"id":"t042","mot":"Jérémie","interdits":["prophète","citerne","boue","Jérusalem","jeune"],"difficulte":"moyen"},{"id":"t043","mot":"Thomas","interdits":["apôtre","douter","clous","côté","Jumeau"],"difficulte":"moyen"},{"id":"t044","mot":"Marthe","interdits":["Marie","Lazare","sœur","Béthanie","tâches"],"difficulte":"moyen"},{"id":"t045","mot":"Étienne","interdits":["lapider","Saul","ange","disciple","Sanhédrin"],"difficulte":"moyen"},{"id":"t046","mot":"Balaam","interdits":["ânesse","prophète","parler","Balak","ange"],"difficulte":"moyen"},{"id":"t047","mot":"Déborah","interdits":["juge","Barak","prophétesse","palmier","Sissera"],"difficulte":"moyen"},{"id":"t048","mot":"Marie de Magdala","interdits":["tombe","démons","jardinier","résurrection","pleurer"],"difficulte":"moyen"},{"id":"t049","mot":"Gabriel","interdits":["ange","Marie","annoncer","Daniel","Zacharie"],"difficulte":"moyen"},{"id":"t050","mot":"Ponce Pilate","interdits":["gouverneur","mains","Barabbas","vérité","Romain"],"difficulte":"moyen"},{"id":"t051","mot":"Abigaïl","interdits":["Nabal","David","sage","provisions","ânes"],"difficulte":"difficile"},{"id":"t052","mot":"Naamân","interdits":["lèpre","Jourdain","sept fois","Élisée","Syrie"],"difficulte":"difficile"},{"id":"t053","mot":"Mardochée","interdits":["Esther","Aman","cousin","Juif","cheval"],"difficulte":"difficile"},{"id":"t054","mot":"Néhémie","interdits":["murailles","Jérusalem","échanson","reconstruire","Artaxerxès"],"difficulte":"difficile"},{"id":"t055","mot":"Dorcas","interdits":["Tabitha","Joppé","vêtements","veuves","Pierre"],"difficulte":"difficile"},{"id":"t056","mot":"Lydie","interdits":["pourpre","Philippes","marchande","Paul","rivière"],"difficulte":"difficile"},{"id":"t057","mot":"Eutyche","interdits":["fenêtre","tomber","Paul","sommeil","Troas"],"difficulte":"difficile"},{"id":"t058","mot":"Corneille","interdits":["centurion","Pierre","nations","Romain","vision"],"difficulte":"difficile"},{"id":"t059","mot":"Anne (mère de Samuel)","interdits":["prière","Elkana","stérile","Samuel","Héli"],"difficulte":"difficile"},{"id":"t060","mot":"Nicodème","interdits":["nuit","Pharisien","naître","aloès","chef"],"difficulte":"difficile"},{"id":"t061","mot":"Éden","interdits":["jardin","Adam","Ève","paradis","arbre"],"difficulte":"facile"},{"id":"t062","mot":"Égypte","interdits":["Pharaon","Nil","Moïse","Joseph","esclaves"],"difficulte":"facile"},{"id":"t063","mot":"mer Rouge","interdits":["Moïse","traverser","eaux","Pharaon","Égyptiens"],"difficulte":"facile"},{"id":"t064","mot":"Jéricho","interdits":["muraille","Josué","cors","Rahab","sept jours"],"difficulte":"facile"},{"id":"t065","mot":"Jérusalem","interdits":["temple","Sion","David","Juda","ville sainte"],"difficulte":"facile"},{"id":"t066","mot":"Bethléem","interdits":["naissance","Jésus","David","bergers","mangeoire"],"difficulte":"facile"},{"id":"t067","mot":"Nazareth","interdits":["Jésus","Galilée","charpentier","Marie","synagogue"],"difficulte":"facile"},{"id":"t068","mot":"Jourdain","interdits":["fleuve","baptême","Jean","Naamân","traverser"],"difficulte":"facile"},{"id":"t069","mot":"Sodome","interdits":["Gomorrhe","feu","Loth","soufre","détruire"],"difficulte":"moyen"},{"id":"t070","mot":"Babylone","interdits":["Nabuchodonosor","Daniel","exil","Euphrate","Juifs"],"difficulte":"moyen"},{"id":"t071","mot":"Ninive","interdits":["Jonas","Assyrie","repentir","grande ville","sac"],"difficulte":"moyen"},{"id":"t072","mot":"mont Sinaï","interdits":["Moïse","Loi","tablettes","Horeb","tonnerre"],"difficulte":"moyen"},{"id":"t073","mot":"mer de Galilée","interdits":["pêcheurs","tempête","marcher","lac","Capharnaüm"],"difficulte":"moyen"},{"id":"t074","mot":"Canaan","interdits":["Terre promise","lait","miel","Josué","Abraham"],"difficulte":"moyen"},{"id":"t075","mot":"Damas","interdits":["Paul","route","aveugle","Ananias","Syrie"],"difficulte":"moyen"},{"id":"t076","mot":"Rome","interdits":["Paul","César","empereur","prisonnier","Italie"],"difficulte":"moyen"},{"id":"t077","mot":"Patmos","interdits":["île","Jean","Révélation","exil","vision"],"difficulte":"difficile"},{"id":"t078","mot":"Bérée","interdits":["Paul","nobles","examiner","Écritures","Silas"],"difficulte":"difficile"},{"id":"t079","mot":"Malte","interdits":["naufrage","Paul","vipère","île","feu"],"difficulte":"difficile"},{"id":"t080","mot":"Our","interdits":["Abraham","Chaldéens","quitter","Térah","ville"],"difficulte":"difficile"},{"id":"t081","mot":"arche de Noé","interdits":["déluge","animaux","bateau","porte","bois"],"difficulte":"facile"},{"id":"t082","mot":"manne","interdits":["désert","pain","ciel","Israélites","matin"],"difficulte":"facile"},{"id":"t083","mot":"fronde","interdits":["David","Goliath","pierre","lancer","berger"],"difficulte":"facile"},{"id":"t084","mot":"harpe","interdits":["David","jouer","musique","Saül","cordes"],"difficulte":"facile"},{"id":"t085","mot":"trompette","interdits":["sonner","argent","anges","sept","instrument"],"difficulte":"facile"},{"id":"t086","mot":"couronne","interdits":["roi","tête","or","reine","épines"],"difficulte":"facile"},{"id":"t087","mot":"épée","interdits":["esprit","Parole","combat","Pierre","oreille"],"difficulte":"facile"},{"id":"t088","mot":"bâton de Moïse","interdits":["serpent","Aaron","berger","rocher","mer"],"difficulte":"facile"},{"id":"t089","mot":"arc-en-ciel","interdits":["Noé","déluge","alliance","nuage","signe"],"difficulte":"facile"},{"id":"t090","mot":"lampe","interdits":["huile","lumière","vierges","panier","allumer"],"difficulte":"facile"},{"id":"t091","mot":"tablettes de pierre","interdits":["Moïse","Sinaï","Loi","doigt","briser"],"difficulte":"moyen"},{"id":"t092","mot":"bouclier","interdits":["foi","armure","flèches","soldat","protéger"],"difficulte":"moyen"},{"id":"t093","mot":"rouleau","interdits":["lire","Isaïe","synagogue","écrit","livre"],"difficulte":"moyen"},{"id":"t094","mot":"perle","interdits":["marchand","valeur","vendre","porcs","précieux"],"difficulte":"moyen"},{"id":"t095","mot":"graine de moutarde","interdits":["petite","arbre","foi","Royaume","semer"],"difficulte":"moyen"},{"id":"t096","mot":"charrue","interdits":["labourer","main","regarder","champ","bœufs"],"difficulte":"moyen"},{"id":"t097","mot":"tente","interdits":["camper","Abraham","piquets","désert","Paul"],"difficulte":"moyen"},{"id":"t098","mot":"autel","interdits":["sacrifice","offrande","feu","Élie","pierres"],"difficulte":"moyen"},{"id":"t099","mot":"Arche de l’alliance","interdits":["Très-Saint","chérubins","or","Ouzza","tablettes"],"difficulte":"moyen"},{"id":"t100","mot":"poutre","interdits":["paille","œil","frère","juger","hypocrite"],"difficulte":"moyen"},{"id":"t101","mot":"encens","interdits":["parfum","autel","fumée","prière","brûler"],"difficulte":"difficile"},{"id":"t102","mot":"joug","interdits":["bœufs","léger","porter","épaules","doux"],"difficulte":"difficile"},{"id":"t103","mot":"drachme","interdits":["femme","perdue","lampe","balayer","pièce"],"difficulte":"difficile"},{"id":"t104","mot":"aiguille","interdits":["chameau","trou","riche","Royaume","passer"],"difficulte":"difficile"},{"id":"t105","mot":"ancre","interdits":["espérance","âme","bateau","Paul","ferme"],"difficulte":"difficile"},{"id":"t106","mot":"serpent","interdits":["Ève","Éden","mentir","Satan","ramper"],"difficulte":"facile"},{"id":"t107","mot":"lion","interdits":["Daniel","fosse","Samson","rugir","Juda"],"difficulte":"facile"},{"id":"t108","mot":"colombe","interdits":["Noé","olivier","esprit saint","paix","baptême"],"difficulte":"facile"},{"id":"t109","mot":"chameau","interdits":["aiguille","Rébecca","désert","boire","porter"],"difficulte":"facile"},{"id":"t110","mot":"brebis","interdits":["berger","troupeau","laine","agneau","perdue"],"difficulte":"facile"},{"id":"t111","mot":"poisson","interdits":["Jonas","pêche","filet","pain","mer"],"difficulte":"facile"},{"id":"t112","mot":"étoiles","interdits":["Abraham","ciel","nuit","nombreux","astrologues"],"difficulte":"facile"},{"id":"t113","mot":"ours","interdits":["David","berger","Élisée","forêt","lion"],"difficulte":"facile"},{"id":"t114","mot":"criquet","interdits":["Jean","miel","plaie","Égypte","manger"],"difficulte":"moyen"},{"id":"t115","mot":"corbeau","interdits":["Élie","nourrir","Noé","noir","viande"],"difficulte":"moyen"},{"id":"t116","mot":"olivier","interdits":["huile","colombe","feuille","Noé","branche"],"difficulte":"moyen"},{"id":"t117","mot":"figuier","interdits":["fruits","maudire","feuilles","desséché","Nathanaël"],"difficulte":"moyen"},{"id":"t118","mot":"léopard","interdits":["taches","peau","Koushite","chevreau","rapide"],"difficulte":"difficile"},{"id":"t119","mot":"moineau","interdits":["deux","pièce","Père","tomber","cheveux"],"difficulte":"difficile"},{"id":"t120","mot":"cèdre","interdits":["Liban","bois","temple","Salomon","grand"],"difficulte":"difficile"},{"id":"t121","mot":"création","interdits":["six jours","Adam","lumière","Genèse","repos"],"difficulte":"facile"},{"id":"t122","mot":"déluge","interdits":["Noé","arche","pluie","eau","40 jours"],"difficulte":"facile"},{"id":"t123","mot":"tour de Babel","interdits":["langues","briques","ciel","confusion","Nimrod"],"difficulte":"facile"},{"id":"t124","mot":"buisson ardent","interdits":["Moïse","feu","sandales","brûler","ange"],"difficulte":"facile"},{"id":"t125","mot":"dix plaies","interdits":["Égypte","Pharaon","grenouilles","sang","criquets"],"difficulte":"facile"},{"id":"t126","mot":"Dix Commandements","interdits":["Moïse","tablettes","Sinaï","Loi","pierre"],"difficulte":"facile"},{"id":"t127","mot":"veau d’or","interdits":["Aaron","adorer","Moïse","idole","danser"],"difficulte":"facile"},{"id":"t128","mot":"mariage à Cana","interdits":["eau","vin","Jésus","miracle","jarres"],"difficulte":"facile"},{"id":"t129","mot":"cinq pains et deux poissons","interdits":["foule","nourrir","miracle","paniers","5 000"],"difficulte":"facile"},{"id":"t130","mot":"pêche miraculeuse","interdits":["filets","poissons","Pierre","nuit","bateau"],"difficulte":"facile"},{"id":"t131","mot":"bon Samaritain","interdits":["blessé","prochain","route","Lévite","prêtre"],"difficulte":"facile"},{"id":"t132","mot":"fils perdu (ou fils prodigue)","interdits":["père","porcs","héritage","retourner","fête"],"difficulte":"facile"},{"id":"t133","mot":"brebis perdue","interdits":["99","berger","chercher","épaules","joie"],"difficulte":"facile"},{"id":"t134","mot":"maison sur le roc","interdits":["sable","inondation","fondations","sage","vents"],"difficulte":"facile"},{"id":"t135","mot":"Mémorial","interdits":["pain","vin","mort","Jésus","souvenir"],"difficulte":"facile"},{"id":"t136","mot":"paradis","interdits":["terre","Éden","promesse","toujours","jardin"],"difficulte":"facile"},{"id":"t137","mot":"douze espions","interdits":["Canaan","Josué","Caleb","raisins","40 jours"],"difficulte":"moyen"},{"id":"t138","mot":"fournaise ardente (ou four de feu ardent)","interdits":["Shadrak","statue","feu","Nabuchodonosor","quatrième"],"difficulte":"moyen"},{"id":"t139","mot":"dix vierges","interdits":["lampes","huile","marié","avisées","porte"],"difficulte":"moyen"},{"id":"t140","mot":"semeur","interdits":["graines","route","oiseaux","ronces","bonne terre"],"difficulte":"moyen"},{"id":"t141","mot":"talents","interdits":["maître","serviteurs","cacher","argent","fidèle"],"difficulte":"moyen"},{"id":"t142","mot":"Pentecôte","interdits":["esprit saint","langues","feu","Pierre","3 000"],"difficulte":"moyen"},{"id":"t143","mot":"Har-Maguédon","interdits":["guerre","fin","nations","Dieu","rois"],"difficulte":"moyen"},{"id":"t144","mot":"transfiguration","interdits":["montagne","Moïse","Élie","Pierre","briller"],"difficulte":"moyen"},{"id":"t145","mot":"sermon sur la montagne","interdits":["Jésus","heureux","Matthieu","prière modèle","sel"],"difficulte":"moyen"},{"id":"t146","mot":"exil à Babylone","interdits":["Juifs","70 ans","Nabuchodonosor","Jérusalem","captifs"],"difficulte":"moyen"},{"id":"t147","mot":"dix lépreux","interdits":["guérir","remercier","Samaritain","prêtres","neuf"],"difficulte":"moyen"},{"id":"t148","mot":"écriture sur le mur","interdits":["Balthazar","festin","main","Daniel","Mené"],"difficulte":"difficile"},{"id":"t149","mot":"ouvriers dans la vigne","interdits":["denier","heure","maître","salaire","dernier"],"difficulte":"difficile"},{"id":"t150","mot":"veuve insistante","interdits":["juge","justice","prier","réclamer","nuit"],"difficulte":"difficile"}];window.GAINS={"buzz-refuse":0.135,"buzzer":0.582,"clic":0.18,"entree":0.24,"fin-temps":0.442,"go":0.437,"passer":0.226,"score":0.324,"tic":0.324,"trouve-2":0.282,"trouve-3":0.272,"trouve-4":0.243,"trouve":0.313,"victoire":0.468};</script>
+<script>/*
+ * Tabou biblique : règles du jeu, sans réseau ni affichage.
+ * Une manche ; les équipes jouent à tour de rôle ; les adversaires buzzent une faute.
+ * Navigateur : window.Logique ; Node : module.exports (tests).
+ */
+(function (racine) {
+  'use strict';
+
+  const COULEURS_JOUEURS = [1, 2, 3, 4, 5, 6, 7, 8, 9, 10];
+  const EQUIPES = [
+    { id: 'e1', nom: 'Équipe 1' }, { id: 'e2', nom: 'Équipe 2' },
+    { id: 'e3', nom: 'Équipe 3' }, { id: 'e4', nom: 'Équipe 4' }
+  ];
+  const MAX_JOUEURS = 16;
+  const DUREES = [45, 60, 90];
+  const TOURS = [1, 2];
+  const DUREE_BUZZ = 1500;
+
+  function melanger(t, alea) {
+    const a = t.slice();
+    for (let i = a.length - 1; i > 0; i--) { const j = Math.floor(alea() * (i + 1)); [a[i], a[j]] = [a[j], a[i]]; }
+    return a;
+  }
+
+  function nouvelEtat() {
+    return {
+      phase: 'salle',
+      joueurs: [],
+      reglages: { nbEquipes: 2, duree: 60, toursParJoueur: 1, difficulte: 'toutes', repartition: 'hasard' },
+      cartes: {},            // id -> {mot, interdits}
+      cartesJouees: [],
+      pioche: [],
+      score: {},             // equipeId -> {trouvees, buzz}
+      ronde: 0, nbRondes: 0,
+      equipeQuiJoue: 0, premiereEquipe: 0,
+      rangParleur: {},
+      tour: null, dernierTour: null,
+      version: 0
+    };
+  }
+
+  function equipesActives(etat) { return EQUIPES.slice(0, etat.reglages.nbEquipes); }
+  function membres(etat, eq) { return etat.joueurs.filter(j => j.equipe === eq && j.connecte); }
+
+  function equipeLaMoinsNombreuse(etat) {
+    return equipesActives(etat).map(e => ({ id: e.id, n: etat.joueurs.filter(j => j.equipe === e.id).length })).sort((a, b) => a.n - b.n)[0].id;
+  }
+
+  function ajouterJoueur(etat, cle, prenom) {
+    const existant = etat.joueurs.find(j => j.cle === cle);
+    if (existant) { existant.connecte = true; etat.version++; return { ok: true, joueur: existant }; }
+    if (etat.joueurs.length >= MAX_JOUEURS) return { ok: false, erreur: 'complet' };
+    let nom = String(prenom || '').trim().slice(0, 16) || 'Joueur';
+    const base = nom; let n = 2;
+    while (etat.joueurs.some(j => j.prenom.toLowerCase() === nom.toLowerCase())) nom = base + ' ' + n++;
+    const pris = etat.joueurs.map(j => j.couleur);
+    const couleur = COULEURS_JOUEURS.find(c => !pris.includes(c)) || COULEURS_JOUEURS[etat.joueurs.length % COULEURS_JOUEURS.length];
+    const joueur = { cle, prenom: nom, couleur, hote: etat.joueurs.length === 0, connecte: true, equipe: null };
+    if (etat.phase !== 'salle') joueur.equipe = equipeLaMoinsNombreuse(etat);
+    etat.joueurs.push(joueur);
+    etat.version++;
+    return { ok: true, joueur };
+  }
+
+  function retirerJoueur(etat, cle) {
+    const j = etat.joueurs.find(x => x.cle === cle);
+    if (!j) return;
+    if (etat.phase === 'salle') etat.joueurs = etat.joueurs.filter(x => x.cle !== cle);
+    else j.connecte = false;
+    etat.version++;
+  }
+
+  function regler(etat, r) {
+    if (etat.phase !== 'salle') return;
+    const g = etat.reglages;
+    if (r.nbEquipes != null) g.nbEquipes = Math.max(2, Math.min(4, Number(r.nbEquipes) || 2));
+    if (r.duree != null && DUREES.includes(Number(r.duree))) g.duree = Number(r.duree);
+    if (r.toursParJoueur != null && TOURS.includes(Number(r.toursParJoueur))) g.toursParJoueur = Number(r.toursParJoueur);
+    if (r.difficulte && ['facile', 'moyen', 'difficile', 'toutes'].includes(r.difficulte)) g.difficulte = r.difficulte;
+    if (r.repartition && ['hasard', 'choix'].includes(r.repartition)) g.repartition = r.repartition;
+    const ids = equipesActives(etat).map(e => e.id);
+    etat.joueurs.forEach(j => { if (j.equipe && !ids.includes(j.equipe)) j.equipe = null; });
+    etat.version++;
+  }
+
+  function choisirEquipe(etat, cle, eq) {
+    if (etat.phase !== 'salle') return;
+    const j = etat.joueurs.find(x => x.cle === cle);
+    if (!j || !equipesActives(etat).some(e => e.id === eq)) return;
+    j.equipe = eq; etat.version++;
+  }
+
+  function repartirAuHasard(etat, alea) {
+    const eqs = equipesActives(etat);
+    melanger(etat.joueurs.filter(j => j.connecte), alea).forEach((j, i) => { j.equipe = eqs[i % eqs.length].id; });
+  }
+  function melangerEquipes(etat, alea) { if (etat.phase !== 'salle') return; repartirAuHasard(etat, alea || Math.random); etat.version++; }
+
+  function peutLancer(etat) {
+    const presents = etat.joueurs.filter(j => j.connecte);
+    if (presents.length < etat.reglages.nbEquipes * 2) return { ok: false, erreur: 'pas-assez' };
+    if (etat.reglages.repartition === 'choix') {
+      if (presents.some(j => !j.equipe)) return { ok: false, erreur: 'sans-equipe' };
+      if (equipesActives(etat).some(e => membres(etat, e.id).length < 2)) return { ok: false, erreur: 'equipe-incomplete' };
+    }
+    return { ok: true };
+  }
+
+  function lancer(etat, cartes, alea) {
+    alea = alea || Math.random;
+    const p = peutLancer(etat); if (!p.ok) return p;
+    etat.joueurs = etat.joueurs.filter(j => j.connecte);
+    if (etat.reglages.repartition === 'hasard') repartirAuHasard(etat, alea);
+    const d = etat.reglages.difficulte;
+    let pool = cartes.filter(c => d === 'toutes' || c.difficulte === d);
+    if (pool.length < 20) pool = cartes.slice();
+    let libres = pool.filter(c => !etat.cartesJouees.includes(c.id));
+    if (libres.length < 20) { etat.cartesJouees = []; libres = pool; }
+    etat.cartes = {};
+    libres.forEach(c => { etat.cartes[c.id] = { mot: c.mot, interdits: c.interdits.slice(0, 5) }; });
+    etat.pioche = melanger(libres.map(c => c.id), alea);
+    etat.score = {};
+    equipesActives(etat).forEach(e => { etat.score[e.id] = { trouvees: 0, buzz: 0 }; });
+    const tailleMax = Math.max(...equipesActives(etat).map(e => membres(etat, e.id).length));
+    etat.nbRondes = tailleMax * etat.reglages.toursParJoueur;
+    etat.ronde = 1;
+    etat.rangParleur = {};
+    etat.premiereEquipe = etat.equipeQuiJoue = Math.floor(alea() * etat.reglages.nbEquipes);
+    etat.dernierTour = null;
+    preparerTour(etat);
+    return { ok: true };
+  }
+
+  function prochainParleur(etat, eq) {
+    const m = membres(etat, eq);
+    if (!m.length) return null;
+    return m[(etat.rangParleur[eq] || 0) % m.length].cle;
+  }
+
+  function preparerTour(etat) {
+    const eqs = equipesActives(etat);
+    for (let k = 0; k < eqs.length; k++) {
+      const eq = eqs[etat.equipeQuiJoue].id;
+      const p = prochainParleur(etat, eq);
+      if (p) {
+        etat.tour = { equipe: eq, parleur: p, debut: null, fin: null, carte: null, trouvees: [], passees: [], buzzees: [], buzz: null };
+        etat.phase = 'pret'; etat.version++; return;
+      }
+      avancerEquipe(etat);
+    }
+  }
+
+  /* Passe à l'équipe suivante ; une ronde est finie quand on revient à l'équipe qui a ouvert la partie. */
+  function avancerEquipe(etat) {
+    etat.equipeQuiJoue = (etat.equipeQuiJoue + 1) % etat.reglages.nbEquipes;
+    if (etat.equipeQuiJoue === etat.premiereEquipe) etat.ronde++;
+  }
+
+  function peutPiloter(etat, cle) {
+    if (!etat.tour) return false;
+    if (cle === etat.tour.parleur) return true;
+    const p = etat.joueurs.find(j => j.cle === etat.tour.parleur);
+    const h = etat.joueurs.find(j => j.cle === cle);
+    return !!(h && h.hote && (!p || !p.connecte));
+  }
+
+  function tirer(etat) { const id = etat.pioche.shift() || null; if (id) etat.cartesJouees.push(id); return id; }
+
+  function go(etat, cle, maintenant) {
+    if (etat.phase !== 'pret' || !peutPiloter(etat, cle)) return;
+    const t = etat.tour;
+    t.debut = maintenant; t.fin = maintenant + etat.reglages.duree * 1000;
+    t.carte = tirer(etat);
+    etat.phase = 'tour'; etat.version++;
+  }
+
+  function enPauseBuzz(etat, maintenant) { return etat.tour && etat.tour.buzz && maintenant < etat.tour.buzz.jusque; }
+
+  function trouve(etat, cle, maintenant) {
+    if (etat.phase !== 'tour' || !peutPiloter(etat, cle) || !etat.tour.carte || enPauseBuzz(etat, maintenant)) return;
+    if (maintenant > etat.tour.fin + 400) return;
+    const t = etat.tour;
+    t.trouvees.push(t.carte); etat.score[t.equipe].trouvees++;
+    t.carte = tirer(etat);
+    if (!t.carte) finirTour(etat);
+    etat.version++;
+  }
+
+  function passer(etat, cle, maintenant) {
+    if (etat.phase !== 'tour' || !peutPiloter(etat, cle) || !etat.tour.carte || enPauseBuzz(etat, maintenant)) return;
+    const t = etat.tour;
+    t.passees.push(t.carte);
+    t.carte = tirer(etat);
+    if (!t.carte) finirTour(etat);
+    etat.version++;
+  }
+
+  /* Un adversaire signale une faute : la carte est perdue, son équipe marque 1 point. Seul le premier buzz compte. */
+  function buzzer(etat, cle, maintenant) {
+    if (etat.phase !== 'tour' || !etat.tour.carte) return { ok: false };
+    const j = etat.joueurs.find(x => x.cle === cle);
+    if (!j || !j.equipe || j.equipe === etat.tour.equipe) return { ok: false };
+    if (enPauseBuzz(etat, maintenant) || maintenant > etat.tour.fin) return { ok: false, refuse: true };
+    const t = etat.tour;
+    t.buzzees.push({ carte: t.carte, par: cle });
+    etat.score[j.equipe].buzz++;
+    t.buzz = { par: cle, equipe: j.equipe, carte: t.carte, mot: etat.cartes[t.carte].mot, jusque: maintenant + DUREE_BUZZ, n: t.buzzees.length };
+    t.carte = tirer(etat);
+    if (!t.carte) finirTour(etat);
+    etat.version++;
+    return { ok: true };
+  }
+
+  function finirTour(etat) {
+    const t = etat.tour;
+    /* La carte en cours à la fin du temps n'est pas perdue : elle retourne sous le paquet. */
+    if (t.carte) { etat.pioche.push(t.carte); etat.cartesJouees = etat.cartesJouees.filter(id => id !== t.carte); t.carte = null; }
+    etat.dernierTour = {
+      equipe: t.equipe, parleur: t.parleur,
+      trouvees: t.trouvees.slice(), passees: t.passees.slice(), buzzees: t.buzzees.slice()
+    };
+    etat.rangParleur[t.equipe] = (etat.rangParleur[t.equipe] || 0) + 1;
+    etat.phase = 'finTour'; etat.version++;
+  }
+
+  function tic(etat, maintenant) {
+    if (etat.phase === 'tour' && maintenant >= etat.tour.fin) { finirTour(etat); return true; }
+    return false;
+  }
+
+  function partieFinie(etat) {
+    if (!etat.pioche.length) return true;
+    const suivante = (etat.equipeQuiJoue + 1) % etat.reglages.nbEquipes;
+    return suivante === etat.premiereEquipe && etat.ronde >= etat.nbRondes;
+  }
+
+  function suite(etat) {
+    if (etat.phase !== 'finTour') return;
+    if (partieFinie(etat)) { etat.phase = 'fin'; etat.version++; return; }
+    avancerEquipe(etat);
+    preparerTour(etat);
+  }
+
+  function totaux(etat) {
+    const tot = {};
+    equipesActives(etat).forEach(e => { const s = etat.score[e.id] || { trouvees: 0, buzz: 0 }; tot[e.id] = { trouvees: s.trouvees, buzz: s.buzz, total: s.trouvees + s.buzz }; });
+    return tot;
+  }
+
+  function rejouer(etat) {
+    etat.joueurs = etat.joueurs.filter(j => j.connecte);
+    etat.joueurs.forEach((j, i) => { j.hote = i === 0; if (etat.reglages.repartition === 'hasard') j.equipe = null; });
+    Object.assign(etat, { phase: 'salle', cartes: {}, pioche: [], score: {}, ronde: 0, nbRondes: 0, tour: null, dernierTour: null, rangParleur: {} });
+    etat.version++;
+  }
+
+  function role(etat, cle) {
+    if (!etat.tour) return null;
+    const moi = etat.joueurs.find(j => j.cle === cle);
+    if (cle === etat.tour.parleur) return 'parleur';
+    if (moi && moi.equipe === etat.tour.equipe) return 'equipe';
+    return 'adverse';
+  }
+
+  function carteDe(etat, id) { const c = etat.cartes[id]; return c ? { id, mot: c.mot, interdits: c.interdits.slice() } : null; }
+  function mot(etat, id) { return etat.cartes[id] ? etat.cartes[id].mot : ''; }
+
+  /* Ce que voit un joueur. Carte : parleur et adversaires seulement. Le mot buzzé est montré à tous (la carte est perdue). */
+  function vueDe(etat, cle, maintenant) {
+    const moi = etat.joueurs.find(j => j.cle === cle) || null;
+    const r = role(etat, cle);
+    const t = etat.tour;
+    const voitCarte = etat.phase === 'tour' && t && t.carte && (r === 'parleur' || r === 'adverse');
+    const eqs = equipesActives(etat);
+    const prochainEq = etat.phase === 'finTour' && !partieFinie(etat) ? eqs[(etat.equipeQuiJoue + 1) % eqs.length].id : null;
+    return {
+      phase: etat.phase, version: etat.version, maintenant,
+      reglages: Object.assign({}, etat.reglages),
+      equipes: eqs.map(e => Object.assign({}, e, { joueurs: etat.joueurs.filter(j => j.equipe === e.id).map(j => j.cle) })),
+      moi: moi ? { cle: moi.cle, prenom: moi.prenom, couleur: moi.couleur, hote: moi.hote, equipe: moi.equipe } : null,
+      joueurs: etat.joueurs.map(j => ({ cle: j.cle, prenom: j.prenom, couleur: j.couleur, hote: j.hote, connecte: j.connecte, equipe: j.equipe })),
+      role: r,
+      ronde: etat.ronde, nbRondes: etat.nbRondes,
+      tour: t ? {
+        equipe: t.equipe, parleur: t.parleur, debut: t.debut, fin: t.fin,
+        carte: voitCarte ? carteDe(etat, t.carte) : null,
+        nbTrouvees: t.trouvees.length, nbPassees: t.passees.length, nbBuzzees: t.buzzees.length,
+        buzz: t.buzz && maintenant < t.buzz.jusque + 300 ? Object.assign({}, t.buzz) : null,
+        peutBuzzer: r === 'adverse' && !!(moi && moi.equipe)
+      } : null,
+      pilote: peutPiloter(etat, cle),
+      restantes: etat.pioche.length + (t && t.carte ? 1 : 0),
+      dernierTour: etat.dernierTour ? {
+        equipe: etat.dernierTour.equipe, parleur: etat.dernierTour.parleur,
+        trouvees: etat.dernierTour.trouvees.map(id => mot(etat, id)),
+        passees: etat.dernierTour.passees.map(id => mot(etat, id)),
+        buzzees: etat.dernierTour.buzzees.map(b => ({ mot: mot(etat, b.carte), par: b.par }))
+      } : null,
+      totaux: totaux(etat),
+      prochain: prochainEq ? { equipe: prochainEq, parleur: prochainParleur(etat, prochainEq) } : null,
+      peutLancer: peutLancer(etat)
+    };
+  }
+
+  const Logique = { nouvelEtat, ajouterJoueur, retirerJoueur, regler, choisirEquipe, melangerEquipes, peutLancer, lancer, suite, go, trouve, passer, buzzer, tic, totaux, rejouer, vueDe, EQUIPES, MAX_JOUEURS, DUREES, TOURS, DUREE_BUZZ };
+  if (typeof module !== 'undefined' && module.exports) module.exports = Logique;
+  else racine.Logique = Logique;
+})(typeof window !== 'undefined' ? window : globalThis);
+</script>
+<script>/*
+ * Tabou biblique (Chut !) : connexion entre téléphones (PeerJS 1.5.5, WebRTC).
+ * L'hôte tient l'état et l'envoie à chacun (sa vue seulement). Les invités envoient des actions.
+ * Partie fermée : on n'entre qu'avec le code à 4 lettres.
+ */
+(function (racine) {
+  'use strict';
+  const PREFIXE = 'tabou-biblique-v1-';
+  const LETTRES = 'ABCDEFGHJKLMNPQRSTUVWXYZ';
+  const CLE_SESSION = 'tab-session';
+  const CLE_ETAT = 'tab-etat-hote';
+
+  function codeAuHasard() { let c = ''; for (let i = 0; i < 4; i++) c += LETTRES[Math.floor(Math.random() * LETTRES.length)]; return c; }
+  function cleAuHasard() { return Math.random().toString(36).slice(2, 10) + Date.now().toString(36).slice(-4); }
+  function lire(cle) { try { return JSON.parse(sessionStorage.getItem(cle)); } catch (e) { return null; } }
+  function ecrire(cle, v) { try { v === null ? sessionStorage.removeItem(cle) : sessionStorage.setItem(cle, JSON.stringify(v)); } catch (e) { } }
+
+  /* ---------- Hôte ---------- */
+  function Hote(opts) {
+    const L = racine.Logique;
+    const self = this;
+    const conns = new Map();
+    let peer = null;
+    let etat = opts.etatRepris || L.nouvelEtat();
+    let code = opts.code || codeAuHasard();
+    const cleHote = opts.cle || cleAuHasard();
+    let essais = 0;
+
+    function diffuser() {
+      ecrire(CLE_ETAT, { code, etat, t: Date.now() });
+      const vue = cle => Object.assign(L.vueDe(etat, cle, Date.now()), { code });
+      conns.forEach((c, cle) => { if (c.open) { try { c.send({ t: 'etat', vue: vue(cle) }); } catch (e) { } } });
+      opts.surEtat(vue(cleHote));
+    }
+
+    function action(cle, m) {
+      const est = etat.joueurs.find(j => j.cle === cle);
+      if (!est) return;
+      const t = Date.now();
+      switch (m.a) {
+        case 'equipe': L.choisirEquipe(etat, cle, m.equipe); break;
+        case 'go': L.go(etat, cle, t); break;
+        case 'trouve': L.trouve(etat, cle, t); break;
+        case 'passer': L.passer(etat, cle, t); break;
+        case 'buzzer': {
+          const r = L.buzzer(etat, cle, t);
+          if (r.refuse) { if (cle === cleHote) { if (opts.surRefus) opts.surRefus(); } else { const c = conns.get(cle); if (c && c.open) c.send({ t: 'refus' }); } }
+          break;
+        }
+        default:
+          if (!est.hote) return;
+          if (m.a === 'regler') L.regler(etat, m.reglages);
+          else if (m.a === 'melanger') L.melangerEquipes(etat);
+          else if (m.a === 'lancer') { const r = L.lancer(etat, opts.cartes); if (!r.ok) opts.surErreur(r.erreur); }
+          else if (m.a === 'suite') L.suite(etat);
+          else if (m.a === 'rejouer') L.rejouer(etat);
+          else if (m.a === 'exclure') { conns.get(m.cible) && conns.get(m.cible).close(); L.retirerJoueur(etat, m.cible); }
+      }
+      diffuser();
+    }
+
+    function ouvrir() {
+      peer = new racine.Peer(PREFIXE + code, { debug: 0 });
+      peer.on('open', () => {
+        essais = 0;
+        if (!etat.joueurs.some(j => j.cle === cleHote)) L.ajouterJoueur(etat, cleHote, opts.prenom);
+        ecrire(CLE_SESSION, { role: 'hote', code, cle: cleHote, prenom: opts.prenom, t: Date.now() });
+        opts.surCode(code);
+        diffuser();
+      });
+      peer.on('connection', conn => {
+        let cle = null;
+        conn.on('data', m => {
+          if (!m || typeof m !== 'object') return;
+          if (m.t === 'bonjour') {
+            const r = L.ajouterJoueur(etat, String(m.cle).slice(0, 40), m.prenom);
+            if (!r.ok) { conn.send({ t: 'erreur', code: r.erreur }); setTimeout(() => conn.close(), 400); return; }
+            cle = r.joueur.cle;
+            const ancien = conns.get(cle); if (ancien && ancien !== conn) { try { ancien.close(); } catch (e) { } }
+            conns.set(cle, conn);
+            opts.surArrivee && opts.surArrivee(r.joueur.prenom);
+            diffuser();
+          } else if (m.t === 'action' && cle) action(cle, m);
+          else if (m.t === 'ping') conn.send({ t: 'pong' });
+        });
+        conn.on('close', () => {
+          if (cle && conns.get(cle) === conn) { conns.delete(cle); L.retirerJoueur(etat, cle); diffuser(); }
+        });
+      });
+      peer.on('error', err => {
+        if (err.type === 'unavailable-id') {
+          /* Code déjà pris : un autre au hasard, sauf si l'on reprend sa propre partie (l'ancien lien met quelques secondes à se libérer). */
+          try { peer.destroy(); } catch (e) { }
+          if (opts.etatRepris && essais++ < 8) setTimeout(ouvrir, 2500);
+          else { code = codeAuHasard(); opts.etatRepris = null; setTimeout(ouvrir, 200); }
+        } else if (err.type === 'network' || err.type === 'server-error' || err.type === 'socket-error' || err.type === 'socket-closed') {
+          opts.surReseau && opts.surReseau(false);
+        }
+      });
+      peer.on('disconnected', () => { setTimeout(() => { try { peer.reconnect(); } catch (e) { } }, 1500); });
+    }
+
+    /* Le chronomètre fait foi chez l'hôte : il clôt le tour à l'heure dite. */
+    setInterval(() => { if (L.tic(etat, Date.now())) diffuser(); }, 200);
+    self.agir = m => action(cleHote, m);
+    self.quitter = () => { ecrire(CLE_SESSION, null); ecrire(CLE_ETAT, null); conns.forEach(c => { try { c.send({ t: 'fermee' }); } catch (e) { } }); setTimeout(() => peer && peer.destroy(), 300); };
+    ouvrir();
+  }
+
+  /* ---------- Invité ---------- */
+  function Invite(opts) {
+    const self = this;
+    const code = String(opts.code).toUpperCase().replace(/[^A-Z]/g, '').slice(0, 4);
+    const cle = opts.cle || cleAuHasard();
+    let peer = null, conn = null, dernier = Date.now(), ferme = false, entre = false, essais = 0, minuteur = null;
+
+    function connecter() {
+      if (ferme) return;
+      if (!peer || peer.destroyed) {
+        peer = new racine.Peer({ debug: 0 });
+        peer.on('open', ouvrirLien);
+        peer.on('error', err => {
+          if (err.type === 'peer-unavailable') {
+            if (!entre) { opts.surErreur('introuvable'); self.quitter(true); }
+            else relancer();
+          } else relancer();
+        });
+        peer.on('disconnected', () => { try { peer.reconnect(); } catch (e) { } });
+      } else ouvrirLien();
+    }
+
+    function ouvrirLien() {
+      if (ferme) return;
+      conn = peer.connect(PREFIXE + code, { reliable: true });
+      conn.on('open', () => { essais = 0; dernier = Date.now(); conn.send({ t: 'bonjour', cle, prenom: opts.prenom }); opts.surReseau && opts.surReseau(true); });
+      conn.on('data', m => {
+        dernier = Date.now();
+        if (m.t === 'etat') {
+          if (m.vue && m.vue.maintenant) m.vue.decalage = m.vue.maintenant - Date.now();
+          if (!entre) { entre = true; ecrire(CLE_SESSION, { role: 'invite', code, cle, prenom: opts.prenom, t: Date.now() }); }
+          opts.surEtat(m.vue);
+        } else if (m.t === 'refus') { if (opts.surRefus) opts.surRefus(); }
+        else if (m.t === 'erreur') { opts.surErreur(m.code); self.quitter(true); }
+        else if (m.t === 'fermee') { opts.surErreur('fermee'); self.quitter(true); }
+      });
+      conn.on('close', relancer);
+    }
+
+    function relancer() {
+      if (ferme) return;
+      opts.surReseau && opts.surReseau(false);
+      if (essais++ > 12) { opts.surErreur('perdue'); return; }
+      clearTimeout(minuteur);
+      minuteur = setTimeout(() => { try { conn && conn.close(); } catch (e) { } connecter(); }, Math.min(1000 * essais, 5000));
+    }
+
+    const veille = setInterval(() => {
+      if (ferme) return clearInterval(veille);
+      if (conn && conn.open) { try { conn.send({ t: 'ping' }); } catch (e) { } }
+      if (entre && Date.now() - dernier > 12000) { dernier = Date.now(); relancer(); }
+    }, 4000);
+
+    self.agir = m => { if (conn && conn.open) conn.send(Object.assign({ t: 'action' }, m)); };
+    self.quitter = garderErreur => { ferme = true; clearInterval(veille); if (!garderErreur) ecrire(CLE_SESSION, null); else ecrire(CLE_SESSION, null); try { conn && conn.close(); peer && peer.destroy(); } catch (e) { } };
+    connecter();
+  }
+
+  /* Reprise après rechargement de la page (moins de 3 heures). */
+  function sessionEnCours() {
+    const s = lire(CLE_SESSION);
+    if (!s || Date.now() - s.t > 3 * 3600 * 1000) return null;
+    if (s.role === 'hote') { const e = lire(CLE_ETAT); if (!e || e.code !== s.code) return null; s.etat = e.etat; }
+    return s;
+  }
+
+  racine.Reseau = { Hote, Invite, sessionEnCours, oublier: () => { ecrire(CLE_SESSION, null); ecrire(CLE_ETAT, null); } };
+})(window);
+</script>
+<script>/*
+ * Chut ! (Tabou biblique) : branchement des écrans de Léa sur la logique et le réseau.
+ * Ne modifie pas le dessin : affiche/masque les écrans, remplit les ids, pose les classes d'état.
+ * Sons : règles de Milo (veto) ; le buzzer sonne chez qui fait deviner seulement.
+ */
+(function () {
+  'use strict';
+  const $ = (s, r) => (r || document).querySelector(s);
+  const $$ = (s, r) => Array.from((r || document).querySelectorAll(s));
+  const reduit = window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+  const GAINS = window.GAINS || {};
+
+  /* ---------------- Sons (Web Audio) ---------------- */
+  const NOMS_SONS = ['clic', 'entree', 'go', 'trouve', 'trouve-2', 'trouve-3', 'trouve-4', 'passer', 'tic', 'fin-temps', 'score', 'victoire', 'buzzer', 'buzz-refuse'];
+  let ctx = null; const tampons = {}; const dernier = {}; const enCours = {};
+  function initAudio() {
+    if (ctx) { if (ctx.state === 'suspended') ctx.resume(); return; }
+    const AC = window.AudioContext || window.webkitAudioContext; if (!AC) return;
+    ctx = new AC();
+    NOMS_SONS.forEach(n => fetch('sons/' + n + '.mp3').then(r => r.arrayBuffer()).then(b => ctx.decodeAudioData(b)).then(t => { tampons[n] = t; }).catch(() => { }));
+  }
+  document.addEventListener('pointerdown', initAudio, { capture: true });
+  document.addEventListener('keydown', initAudio, { capture: true });
+  const SUPERPOSES = ['trouve', 'trouve-2', 'trouve-3', 'trouve-4', 'tic'];
+  let buzzerJusque = 0;
+  function jouer(n, delai) {
+    if (!ctx || !tampons[n]) return;
+    const t = performance.now();
+    if (n === 'tic' && t < buzzerJusque) return;                     /* un tic dans le buzzer est sauté */
+    const ecart = { clic: 80, entree: 400, trouve: 150, 'trouve-2': 150, 'trouve-3': 150, 'trouve-4': 150 }[n];
+    if (ecart && dernier[n] && t - dernier[n] < ecart) return;
+    dernier[n] = t;
+    if (!SUPERPOSES.includes(n) && enCours[n]) { try { enCours[n].stop(); } catch (e) { } }
+    let d = delai || 0;
+    if (n === 'fin-temps' && t < buzzerJusque) d = Math.max(d, (buzzerJusque - t) / 1000 + 0.1);
+    const src = ctx.createBufferSource(); src.buffer = tampons[n];
+    const g = ctx.createGain(); g.gain.value = GAINS[n] != null ? GAINS[n] : 0.4;
+    src.connect(g).connect(ctx.destination);
+    src.start(ctx.currentTime + d);
+    enCours[n] = src;
+    if (n === 'buzzer') buzzerJusque = t + tampons[n].duration * 1000;
+  }
+  function jouerHote(n, delai) { if (vue && vue.moi && vue.moi.hote) jouer(n, delai); }
+  const SONS_PROPRES = ['btn-trouve', 'btn-passer', 'btn-go', 'btn-go-secours', 'btn-buzzer'];
+  document.addEventListener('pointerup', e => {
+    const b = e.target.closest('.btn, .btn-rond, .pas button, .btn-go');
+    if (b && !b.disabled && !SONS_PROPRES.includes(b.id)) jouer('clic');
+  });
+  function vibrer(m) { try { if (navigator.vibrate) navigator.vibrate(m); } catch (e) { } }
+
+  /* ---------------- Écrans et outils ---------------- */
+  let ecranActuel = null;
+  function montrer(nom) {
+    const id = 'ecran-' + nom;
+    if (ecranActuel === id) return;
+    $$('.ecran').forEach(s => { s.hidden = s.id !== id; s.classList.remove('entre'); });
+    const s = document.getElementById(id);
+    if (!reduit) { void s.offsetWidth; s.classList.add('entre'); }
+    ecranActuel = id;
+    window.scrollTo(0, 0);
+  }
+  function rejoue(el, cls) { if (!el) return; el.classList.remove(cls); void el.offsetWidth; el.classList.add(cls); }
+  function texte(sel, t, r) { const el = typeof sel === 'string' ? $(sel, r) : sel; if (el) el.textContent = t; }
+  function textes(sel, t, r) { $$(sel, r).forEach(el => { el.textContent = t; }); }
+  function pastille(el, j) { if (!el || !j) return; el.style.setProperty('--j', 'var(--j' + j.couleur + ')'); el.textContent = (j.prenom || '?').trim().charAt(0).toUpperCase(); }
+  function couleurEquipe(el, eq) { if (el) el.style.setProperty('--e', 'var(--' + eq + ')'); }
+  function pluriel(n, s, p) { return n + ' ' + (n > 1 ? (p || s + 's') : s); }
+  function joueurDe(cle) { return vue && vue.joueurs.find(x => x.cle === cle); }
+  function nomEquipe(eq) { const e = vue && vue.equipes.find(x => x.id === eq); return e ? e.nom : ''; }
+  function hote() { return vue && vue.joueurs.find(j => j.hote); }
+  function prenomHote() { return (hote() || {}).prenom || 'L\'hôte'; }
+  /* Seuils de taille de Léa (tailler), repris tels quels */
+  function tailler(el, c) {
+    const m = $('[data-role="mot"]', el), l = $('[data-role="interdits"]', el);
+    const mt = c.mot.match(/^(.*?)\s*\((.+)\)\s*$/), base = mt ? mt[1] : c.mot;
+    m.textContent = base;
+    if (mt) { const sm = document.createElement('small'); sm.className = 'precision'; sm.textContent = mt[2]; m.appendChild(sm); }
+    const lw = Math.max(...base.split(' ').map(w => w.length));
+    m.classList.toggle('long', base.length <= 22 && (base.length > 14 || lw >= 12)); m.classList.toggle('tres-long', base.length > 22);
+    l.innerHTML = ''; c.interdits.forEach(t => { const li = document.createElement('li'); li.textContent = t; l.appendChild(li); });
+    l.classList.toggle('longs', c.interdits.some(t => t.length > 13));
+  }
+
+  /* ---------------- État local ---------------- */
+  let session = null, vue = null, prec = null, decalage = 0;
+  let modeFormulaire = 'rejoindre';
+  let serie = 0;
+  let ecranAvantRegles = 'accueil';
+  let gaucher = false;
+  try { gaucher = localStorage.getItem('schib-gaucher') === '1'; } catch (e) { }
+
+  /* ---------------- Accueil, entrée, règles ---------------- */
+  $('#btn-creer').addEventListener('click', () => ouvrirFormulaire('creer'));
+  $('#btn-rejoindre').addEventListener('click', () => ouvrirFormulaire('rejoindre'));
+  $('#btn-regles').addEventListener('click', () => { ecranAvantRegles = ecranActuel ? ecranActuel.replace('ecran-', '') : 'accueil'; montrer('regles'); });
+  $('#btn-fermer-regles').addEventListener('click', () => montrer(ecranAvantRegles));
+  $('#btn-regles-ok').addEventListener('click', () => montrer(ecranAvantRegles));
+  $('#btn-retour-accueil').addEventListener('click', () => montrer('accueil'));
+  function lirePrenom() { try { return localStorage.getItem('schib-prenom') || localStorage.getItem('babel-prenom') || ''; } catch (e) { return ''; } }
+  function ouvrirFormulaire(mode) {
+    modeFormulaire = mode;
+    const s = $('#ecran-entree');
+    s.classList.toggle('mode-creer', mode === 'creer'); s.classList.toggle('mode-rejoindre', mode !== 'creer');
+    $('#champ-prenom').value = lirePrenom(); $('#champ-code').value = ''; $('#champ-code').classList.remove('refusee');
+    $('#btn-entrer').disabled = false;
+    montrer('entree');
+    setTimeout(() => $(mode === 'creer' || !$('#champ-prenom').value ? '#champ-prenom' : '#champ-code').focus(), 50);
+  }
+  function secouer(el) { el.classList.add('refusee'); rejoue(el, 'secoue'); }
+  $('#champ-code').addEventListener('input', e => { e.target.value = e.target.value.toUpperCase().replace(/[^A-Z]/g, '').slice(0, 4); e.target.classList.remove('refusee'); });
+  $('#form-entree').addEventListener('submit', e => {
+    e.preventDefault();
+    const prenom = $('#champ-prenom').value.trim();
+    if (!prenom) { secouer($('#champ-prenom')); $('#champ-prenom').focus(); return; }
+    try { localStorage.setItem('schib-prenom', prenom); } catch (err) { }
+    if (modeFormulaire === 'creer') demarrerHote(prenom);
+    else {
+      const code = $('#champ-code').value;
+      if (code.length !== 4) { secouer($('#champ-code')); $('#champ-code').focus(); return; }
+      demarrerInvite(prenom, code);
+    }
+    $('#btn-entrer').disabled = true;
+  });
+
+  /* ---------------- Connexion ---------------- */
+  let tropTard = false;
+  function rappels() {
+    return {
+      surEtat: v => afficher(v),
+      surErreur: code => montrerErreur(code),
+      surReseau: ok => $('#bandeau-connexion').classList.toggle('visible', !ok),
+      surRefus: () => { jouer('buzz-refuse'); if ($('#voile-buzz').classList.contains('visible')) { tropTard = true; majVoile(); } },
+      surCode: () => { }, surArrivee: () => { }
+    };
+  }
+  function demarrerHote(prenom, reprise) { fermerSession(); session = new window.Reseau.Hote(Object.assign(rappels(), { prenom, cartes: window.CARTES, code: reprise && reprise.code, cle: reprise && reprise.cle, etatRepris: reprise && reprise.etat })); }
+  function demarrerInvite(prenom, code, cle) { fermerSession(); session = new window.Reseau.Invite(Object.assign(rappels(), { prenom, code, cle })); }
+  function fermerSession() { if (session) { try { session.quitter(); } catch (e) { } } session = null; vue = null; prec = null; }
+  function agir(m) { if (session) session.agir(m); }
+  function quitter() { fermerSession(); window.Reseau.oublier(); $('#bandeau-connexion').classList.remove('visible'); fermerVoile(); montrer('accueil'); }
+  function montrerErreur(code) {
+    $('#btn-entrer').disabled = false;
+    if (code === 'pas-assez' || code === 'sans-equipe' || code === 'equipe-incomplete') return;
+    $$('#ecran-erreur .carte-erreur').forEach(c => { c.hidden = true; });
+    if (code === 'introuvable') { $('#erreur-code').hidden = false; texte('#erreur-code [data-role="code-saisi"]', $('#champ-code').value || '····'); }
+    else if (code === 'complet') $('#erreur-complet').hidden = false;
+    else {
+      $('#erreur-connexion').hidden = false;
+      if (code === 'fermee') { texte('#erreur-connexion h2', 'Partie terminée'); texte('#erreur-connexion p', 'L\'hôte a fermé la partie.'); texte('#btn-reessayer', 'Retour à l\'accueil'); }
+      else { texte('#erreur-connexion h2', 'Connexion perdue'); texte('#erreur-connexion p', 'Vérifiez le Wi-Fi ou les données mobiles, puis réessayez.'); texte('#btn-reessayer', 'Réessayer'); }
+    }
+    montrer('erreur');
+  }
+  $('#btn-ressaisir-code').addEventListener('click', () => ouvrirFormulaire('rejoindre'));
+  $('#btn-erreur-accueil').addEventListener('click', quitter);
+  $('#btn-reessayer').addEventListener('click', () => { const s = window.Reseau.sessionEnCours(); if ($('#btn-reessayer').textContent.indexOf('Réessayer') === 0 && s) reprendre(s); else quitter(); });
+
+  /* ---------------- Salle d'attente ---------------- */
+  $('#btn-copier-code').addEventListener('click', () => {
+    const code = (vue && vue.code) || ''; const b = $('#btn-copier-code'); const t = b.innerHTML;
+    const fini = () => { b.lastChild.textContent = ' Code copié'; setTimeout(() => { b.innerHTML = t; }, 1500); };
+    if (navigator.clipboard) navigator.clipboard.writeText(code).then(fini, fini); else fini();
+  });
+  $('#btn-quitter-salle').addEventListener('click', quitter);
+  $('#equipes-moins').addEventListener('click', () => agir({ a: 'regler', reglages: { nbEquipes: vue.reglages.nbEquipes - 1 } }));
+  $('#equipes-plus').addEventListener('click', () => agir({ a: 'regler', reglages: { nbEquipes: vue.reglages.nbEquipes + 1 } }));
+  [['duree', 'duree'], ['tours', 'toursParJoueur'], ['difficulte', 'difficulte'], ['repartition', 'repartition']].forEach(([nom, cle]) => {
+    $$('input[name="' + nom + '"]').forEach(r => r.addEventListener('change', e => { const o = {}; o[cle] = e.target.value; agir({ a: 'regler', reglages: o }); }));
+  });
+  $('#btn-melanger').addEventListener('click', () => { agir({ a: 'melanger' }); rejoue($('#equipes'), 'melange'); setTimeout(() => $('#equipes').classList.remove('melange'), 800); });
+  $('#btn-lancer').addEventListener('click', () => agir({ a: 'lancer' }));
+  const RAISONS = {
+    'pas-assez': n => 'Il faut au moins 2 personnes par équipe : ' + (n * 2) + ' pour ' + n + ' équipes.',
+    'sans-equipe': () => 'Tout le monde doit choisir son équipe.',
+    'equipe-incomplete': () => 'Chaque équipe doit compter au moins 2 personnes.'
+  };
+  function ligneJoueur(j, moi, avant) {
+    const li = document.createElement('li');
+    li.className = 'joueur'; li.dataset.joueur = j.cle;
+    li.classList.toggle('est-moi', j.cle === moi.cle); li.classList.toggle('est-hote', j.hote); li.classList.toggle('deconnecte', !j.connecte);
+    li.innerHTML = '<span class="pastille petite"></span><span class="nom"></span>';
+    pastille($('.pastille', li), j); $('.nom', li).textContent = j.prenom;
+    const badges = [];
+    if (j.hote) badges.push('<span class="badge badge-hote">Hôte</span>');
+    if (j.cle === moi.cle) badges.push('<span class="badge badge-vous">Vous</span>');
+    if (!j.connecte) badges.push('<span class="badge badge-off">hors ligne</span>');
+    if (badges.length) { const b = document.createElement('span'); b.className = 'badges'; b.innerHTML = badges.join(''); li.append(b); }
+    if (avant && !avant.includes(j.cle)) { li.classList.add('vient-d-arriver'); setTimeout(() => li.classList.remove('vient-d-arriver'), 600); if (j.cle !== moi.cle) jouerHote('entree'); }
+    return li;
+  }
+  function rendreSalle() {
+    const moi = vue.moi, r = vue.reglages, s = $('#ecran-attente'), code = vue.code || '';
+    const bloc = $('#code-partie');
+    bloc.innerHTML = code.split('').map(l => '<span>' + l + '</span>').join('');
+    bloc.setAttribute('aria-label', 'Code ' + code.split('').join(' '));
+    s.classList.toggle('est-hote', moi.hote);
+    s.classList.toggle('repartition-hasard', r.repartition === 'hasard'); s.classList.toggle('repartition-choix', r.repartition === 'choix');
+    texte('#equipes-valeur', String(r.nbEquipes));
+    $('#equipes-moins').disabled = r.nbEquipes <= 2; $('#equipes-plus').disabled = r.nbEquipes >= 4;
+    [['duree', r.duree], ['tours', r.toursParJoueur], ['difficulte', r.difficulte], ['repartition', r.repartition]].forEach(([nom, v]) => $$('input[name="' + nom + '"]').forEach(i => { i.checked = String(i.value) === String(v); }));
+    $('[data-role="resume-reglages"]').innerHTML = '<li><span>Équipes</span> ' + r.nbEquipes + '</li><li><span>Tour</span> ' + r.duree + ' s</li><li><span>Chacun fait deviner</span> ' + r.toursParJoueur + ' fois</li><li><span>Difficulté</span> ' + r.difficulte + '</li><li><span>Répartition</span> <span data-role="txt-repartition">' + (r.repartition === 'choix' ? 'au choix' : 'au hasard') + '</span></li>';
+    const avant = prec && prec.phase === 'salle' ? prec.joueurs.map(j => j.cle) : null;
+    const box = $('#equipes'); box.innerHTML = '';
+    vue.equipes.forEach(e => {
+      const d = document.createElement('div');
+      d.className = 'equipe'; d.dataset.equipe = e.id; couleurEquipe(d, e.id);
+      const membres = vue.joueurs.filter(j => j.equipe === e.id);
+      const actifs = membres.filter(j => j.connecte).length;
+      d.classList.toggle('est-mienne', moi.equipe === e.id); d.classList.toggle('incomplete', actifs < 2);
+      d.innerHTML = '<div class="equipe-tete"><strong data-role="nom-equipe"></strong><span class="nb" data-role="nb"></span></div><span class="mienne">Votre équipe</span><ul class="liste-membres" data-role="membres"></ul><span class="manque" data-role="manque"></span><button class="btn btn-second btn-choisir-equipe" type="button">Rejoindre</button>';
+      texte('[data-role="nom-equipe"]', e.nom, d); texte('[data-role="nb"]', String(membres.length), d);
+      const manque = Math.max(0, 2 - actifs);
+      texte('[data-role="manque"]', manque ? 'Il manque ' + pluriel(manque, 'personne') : '', d);
+      membres.forEach(j => $('ul', d).append(ligneJoueur(j, moi, avant)));
+      const b = $('.btn-choisir-equipe', d); b.dataset.equipe = e.id; b.hidden = moi.equipe === e.id;
+      b.addEventListener('click', () => agir({ a: 'equipe', equipe: e.id }));
+      box.append(d);
+    });
+    const sans = vue.joueurs.filter(j => !j.equipe);
+    const ulSans = $('[data-role="sans-equipe"]'); ulSans.innerHTML = '';
+    sans.forEach(j => ulSans.append(ligneJoueur(j, moi, avant)));
+    $('#sans-equipe').hidden = !sans.length;
+    texte('#nb-joueurs', pluriel(vue.joueurs.length, 'personne') + ' sur 16');
+    texte('#attente-invite [data-role="attente-texte"]', prenomHote() + ' lancera la partie quand tout le monde sera là.');
+    const p = vue.peutLancer;
+    $('#btn-lancer').disabled = !p.ok;
+    texte('#raison-lancer', p.ok ? '' : (RAISONS[p.erreur] ? RAISONS[p.erreur](r.nbEquipes) : ''));
+  }
+
+  /* ---------------- « On y va ? » ---------------- */
+  $('#btn-go').addEventListener('click', () => { jouer('go'); serie = 0; agir({ a: 'go' }); });
+  $('#btn-go-secours').addEventListener('click', () => { jouer('go'); serie = 0; agir({ a: 'go' }); });
+  $('#reglage-gaucher').checked = gaucher;
+  $('#reglage-gaucher').addEventListener('change', e => { gaucher = e.target.checked; try { localStorage.setItem('schib-gaucher', gaucher ? '1' : '0'); } catch (err) { } $('#ecran-tour-parleur').classList.toggle('gaucher', gaucher); });
+  function ronde() { return 'Ronde ' + Math.min(vue.ronde, vue.nbRondes) + ' sur ' + vue.nbRondes; }
+  function rendrePret() {
+    const s = $('#ecran-pret'), t = vue.tour, role = vue.role;
+    const parleur = joueurDe(t.parleur), nom = parleur ? parleur.prenom : '';
+    s.classList.remove('role-parleur', 'role-equipe', 'role-adverse'); s.classList.add('role-' + role);
+    s.classList.toggle('pilote-secours', !!vue.pilote && role !== 'parleur');
+    texte('[data-role="ronde"]', ronde(), s);
+    $$('[data-role="equipe-du-tour"]', s).forEach(el => { el.textContent = nomEquipe(t.equipe); couleurEquipe(el, t.equipe); });
+    texte('[data-role="duree"]', vue.reglages.duree + ' s', s);
+    $$('.qui-parle .pastille', s).forEach(el => pastille(el, parleur));
+    $$('.qui-parle .prenom', s).forEach(el => { el.textContent = nom; });
+    texte('.vue-equipe > .sous', nom + ' lance le chrono. Criez vos réponses !', s);
+    texte('.vue-equipe .secours .sous', nom + ' est hors ligne. En tant qu\'hôte, vous pouvez lancer le tour pour l\'équipe.', s);
+    $('.vue-equipe > .attente p', s).innerHTML = '<strong>En attente du Go</strong>';
+    $('.vue-equipe > .attente p', s).append(document.createTextNode('Le tour commence quand ' + nom + ' touche « Go ».'));
+    $('.vue-adverse .attente p', s).innerHTML = '<strong>En attente du Go</strong>';
+    $('.vue-adverse .attente p', s).append(document.createTextNode(nom + ' va faire deviner pour l\'' + nomEquipe(t.equipe) + '.'));
+  }
+
+  /* ---------------- Tour ---------------- */
+  let attenteSortie = null, carteAffichee = null;
+  function sortie(cls) {
+    if (reduit) return;
+    const c = $('#carte-tour');
+    c.classList.remove('entre', 'sort-trouve', 'sort-passe', 'sort-buzz'); void c.offsetWidth; c.classList.add(cls);
+    attenteSortie = performance.now();
+  }
+  $('#btn-trouve').addEventListener('click', () => {
+    if (!vue || vue.phase !== 'tour' || $('#btn-trouve').disabled) return;
+    serie++; jouer(serie <= 1 ? 'trouve' : 'trouve-' + Math.min(4, serie)); vibrer(30);
+    sortie('sort-trouve'); agir({ a: 'trouve' });
+  });
+  $('#btn-passer').addEventListener('click', () => {
+    if (!vue || vue.phase !== 'tour' || $('#btn-passer').disabled) return;
+    serie = 0; jouer('passer'); vibrer([15, 40, 15]);
+    sortie('sort-passe'); agir({ a: 'passer' });
+  });
+  const buzzer = $('#btn-buzzer');
+  buzzer.addEventListener('pointerdown', () => { if (!buzzer.disabled) { rejoue(buzzer, 'enfonce'); setTimeout(() => buzzer.classList.remove('enfonce'), 160); } });
+  buzzer.addEventListener('click', () => {
+    if (!vue || vue.phase !== 'tour' || buzzer.disabled) return;
+    vibrer(80); agir({ a: 'buzzer' });
+  });
+  function poserCarte(el, carte, animer) {
+    if (!carte) return;
+    const ecrire = () => {
+      el.classList.remove('sort-trouve', 'sort-passe', 'sort-buzz');
+      tailler(el, carte);
+      if (animer && !reduit) rejoue(el, 'entre');
+    };
+    if (el.id === 'carte-tour') {
+      if (carteAffichee === carte.id) return;
+      carteAffichee = carte.id;
+      const ecoule = attenteSortie ? performance.now() - attenteSortie : 999; attenteSortie = null;
+      if (ecoule < 220) setTimeout(ecrire, 220 - ecoule); else ecrire();
+    } else ecrire();
+  }
+  function rendreTour(nouvelle) {
+    const t = vue.tour, role = vue.role, nom = (joueurDe(t.parleur) || {}).prenom || '';
+    const id = role === 'parleur' || (vue.pilote && t.carte && role !== 'adverse') ? 'tour-parleur' : (role === 'equipe' ? 'tour-equipe' : 'tour-adverse');
+    const s = document.getElementById('ecran-' + id);
+    $$('[data-role="equipe-du-tour"]', s).forEach(el => { el.textContent = nomEquipe(t.equipe) + (id === 'tour-adverse' ? ' joue' : ''); couleurEquipe(el, t.equipe); });
+    if (id === 'tour-equipe') { const p = $('.barre .puce-equipe', s); if (p) { p.textContent = nomEquipe(t.equipe) + ' · vous'; couleurEquipe(p, t.equipe); } texte('[data-role="nom-parleur"]', nom, s); }
+    [['nb-trouvees', t.nbTrouvees], ['nb-buzzees', t.nbBuzzees]].forEach(([r, n]) => $$('[data-role="' + r + '"]', s).forEach(el => { if (el.textContent !== String(n)) { el.textContent = String(n); if (!nouvelle) rejoue(el, 'pop'); } }));
+    const enBuzz = !!t.buzz && (Date.now() + decalage) < t.buzz.jusque;
+    $$('#ecran-tour-parleur, #ecran-tour-equipe, #ecran-tour-adverse').forEach(e => e.classList.toggle('buzz-en-cours', enBuzz));
+    if (id === 'tour-parleur') {
+      if (nouvelle) { carteAffichee = null; serie = 0; }
+      s.classList.toggle('gaucher', gaucher);
+      const derniere = vue.restantes <= 1;
+      s.classList.toggle('derniere-carte', derniere);
+      $('#btn-passer').disabled = enBuzz || derniere; $('#btn-trouve').disabled = enBuzz;
+      if (t.carte) poserCarte($('#carte-tour'), t.carte, true);
+    }
+    if (id === 'tour-adverse') {
+      buzzer.disabled = enBuzz || !t.peutBuzzer || !t.carte;
+      if (t.carte) poserCarte($('#carte-surveillance'), t.carte, false);
+    }
+    montrer(id);
+  }
+
+  /* ---------------- Voile du buzz ---------------- */
+  let voileN = null, voileMinuteur = null;
+  function majVoile() {
+    const v = $('#voile-buzz'), b = vue && vue.tour && vue.tour.buzz;
+    v.classList.remove('vue-buzzeur', 'vue-parleur', 'vue-trop-tard');
+    if (tropTard) v.classList.add('vue-trop-tard');
+    else if (b && vue.moi && b.par === vue.moi.cle) v.classList.add('vue-buzzeur');
+    else if (b && vue.tour && vue.tour.parleur === vue.moi.cle) v.classList.add('vue-parleur');
+  }
+  function ouvrirVoile(b) {
+    const v = $('#voile-buzz');
+    textes('[data-role="nom-buzzeur"]', (joueurDe(b.par) || {}).prenom || '', v);
+    const pe = $('[data-role="equipe-buzzeur"]', v); pe.textContent = '+1 ' + nomEquipe(b.equipe); couleurEquipe(pe, b.equipe);
+    texte('[data-role="mot-perdu"]', b.mot, v);
+    majVoile();
+    v.classList.add('visible');
+    clearTimeout(voileMinuteur);
+    const reste = Math.max(400, b.jusque - (Date.now() + decalage));
+    voileMinuteur = setTimeout(() => { fermerVoile(); if (vue && vue.phase === 'tour') rendreTour(false); }, reste);
+  }
+  function fermerVoile() { $('#voile-buzz').classList.remove('visible', 'vue-buzzeur', 'vue-parleur', 'vue-trop-tard'); tropTard = false; }
+  function suivreBuzz() {
+    const b = vue.tour && vue.tour.buzz;
+    if (!b || b.n === voileN) return;
+    voileN = b.n;
+    serie = 0;
+    if (vue.tour.parleur === vue.moi.cle) { jouer('buzzer'); vibrer([60, 40, 60]); if (!reduit) { const c = $('#carte-tour'); c.classList.remove('entre'); void c.offsetWidth; c.classList.add('sort-buzz'); attenteSortie = performance.now() + 80; } }
+    ouvrirVoile(b);
+  }
+
+  /* Chronomètre sur l'heure de l'hôte. Tic et fin du temps chez qui fait deviner (veto de Milo). */
+  let dernierTic = null, finJouee = null;
+  setInterval(() => {
+    if (!vue || vue.phase !== 'tour' || !vue.tour || !vue.tour.fin) return;
+    const t = vue.tour;
+    const reste = Math.max(0, t.fin - (Date.now() + decalage));
+    const sec = Math.ceil(reste / 1000);
+    const part = Math.max(0, Math.min(1, reste / (vue.reglages.duree * 1000)));
+    $$('[data-role="secondes"]').forEach(e => { if (e.textContent !== String(sec)) { e.textContent = String(sec); if (sec <= 5 && sec > 0 && !reduit) rejoue(e, 'chrono-chiffres'); } });
+    $$('.chrono-reste').forEach(e => e.style.setProperty('--reste', part.toFixed(3)));
+    $$('#ecran-tour-parleur, #ecran-tour-equipe, #ecran-tour-adverse').forEach(s => { s.classList.toggle('fin-proche', sec <= 5 && sec > 0); s.classList.toggle('temps-ecoule', sec === 0); });
+    if (vue.role === 'parleur') {
+      if (sec <= 5 && sec >= 1 && dernierTic !== t.fin + ':' + sec) { dernierTic = t.fin + ':' + sec; jouer('tic'); }
+      if (sec === 0 && finJouee !== t.fin) { finJouee = t.fin; jouer('fin-temps'); vibrer(200); }
+    }
+  }, 100);
+
+  /* ---------------- Fin du tour (bilan + score) ---------------- */
+  $('#btn-suite-tour').addEventListener('click', () => agir({ a: 'suite' }));
+  function classement() {
+    return vue.equipes.map(e => Object.assign({ id: e.id, nom: e.nom }, vue.totaux[e.id])).sort((a, b) => b.total - a.total);
+  }
+  function puces(ul, liste, depart) {
+    ul.innerHTML = '';
+    const MAX = 12;
+    liste.slice(0, MAX).forEach((x, i) => { const li = document.createElement('li'); li.style.setProperty('--i', depart + i); li.textContent = x.mot || x; if (x.par) { const sm = document.createElement('small'); sm.textContent = 'par ' + ((joueurDe(x.par) || {}).prenom || ''); li.append(document.createTextNode(' '), sm); } ul.append(li); });
+    if (liste.length > MAX) { const li = document.createElement('li'); li.className = 'plus-autres'; li.textContent = '+ ' + (liste.length - MAX) + (liste.length - MAX > 1 ? ' autres' : ' autre'); ul.append(li); }
+  }
+  function rendreFinTour(nouvelle) {
+    const s = $('#ecran-fin-tour'), d = vue.dernierTour; if (!d) return;
+    const dernier = !vue.prochain;
+    s.classList.toggle('est-hote', vue.moi.hote);
+    s.classList.toggle('aucune-trouvee', !d.trouvees.length);
+    s.classList.toggle('dernier-tour', dernier);
+    texte('#titre-fin-tour', vue.restantes === 0 ? 'Paquet vide !' : 'Temps écoulé !');
+    const pe = $('.barre [data-role="equipe-du-tour"]', s); texte(pe, nomEquipe(d.equipe)); couleurEquipe(pe, d.equipe);
+    texte('[data-role="points-tour"]', '+' + d.trouvees.length, s);
+    texte('[data-role="nom-parleur"]', (joueurDe(d.parleur) || {}).prenom || '', s);
+    texte('[data-role="nb-trouvees-texte"]', pluriel(d.trouvees.length, 'carte'), s);
+    const gains = {}; d.buzzees.forEach(b => { const j = joueurDe(b.par); if (j && j.equipe) gains[j.equipe] = (gains[j.equipe] || 0) + 1; });
+    const ulg = $('[data-role="gains-adverses"]', s); ulg.innerHTML = '';
+    Object.keys(gains).forEach(eq => { const li = document.createElement('li'); const sp = document.createElement('span'); sp.className = 'puce puce-equipe'; couleurEquipe(sp, eq); sp.textContent = '+' + gains[eq] + ' ' + nomEquipe(eq); li.append(sp); ulg.append(li); });
+    ulg.hidden = !Object.keys(gains).length;
+    texte('[data-role="n-trouvees"]', String(d.trouvees.length), s);
+    puces($('[data-role="cartes-trouvees"]', s), d.trouvees, 0);
+    texte('[data-role="n-buzzees"]', String(d.buzzees.length), s);
+    puces($('[data-role="cartes-buzzees"]', s), d.buzzees, d.trouvees.length);
+    $('[data-role="groupe-buzzees"]', s).hidden = !d.buzzees.length;
+    texte('[data-role="n-passees"]', String(d.passees.length), s);
+    puces($('[data-role="cartes-passees"]', s), d.passees, d.trouvees.length + d.buzzees.length);
+    $('[data-role="groupe-passees"]', s).hidden = !d.passees.length;
+    texte('[data-role="avancement"]', ronde(), s);
+    const rail = $('.rail-tours i', s); if (rail) rail.style.setProperty('--part', Math.min(1, vue.ronde / Math.max(1, vue.nbRondes)).toFixed(3));
+    const cl = classement(), max = Math.max(1, cl[0].total);
+    const ol = $('#classement'); ol.innerHTML = '';
+    cl.forEach((e, i) => {
+      const li = document.createElement('li');
+      li.className = 'ligne-score' + (e.total === cl[0].total && e.total > 0 ? ' en-tete' : '');
+      li.dataset.equipe = e.id; couleurEquipe(li, e.id);
+      li.innerHTML = '<span class="rang"></span><span class="milieu"><span class="nom-eq"><span class="pastille-eq"></span><span class="n"></span> <span class="tag"><svg width="14" height="14"><use href="#i-couronne"/></svg>&nbsp;En tête</span></span><span class="barre-score"><i></i></span></span><span class="pts"><b></b><small></small></span>';
+      texte('.rang', String(cl.filter(x => x.total > e.total).length + 1), li);
+      texte('.nom-eq .n', e.nom, li);
+      const barre = $('.barre-score i', li); barre.style.setProperty('--part', (e.total / max).toFixed(3)); barre.style.setProperty('--i', i);
+      texte('.pts b', String(e.total), li);
+      const ceTour = e.id === d.equipe ? '+' + d.trouvees.length + ' ce tour' : (gains[e.id] ? '+' + gains[e.id] + ' au buzzer' : '+0 ce tour');
+      texte('.pts small', ceTour, li);
+      ol.append(li);
+    });
+    if (vue.prochain) {
+      const j = joueurDe(vue.prochain.parleur);
+      pastille($('#prochain .pastille'), j);
+      texte('[data-role="prochain-parleur"]', j ? j.prenom : '', s);
+      texte('[data-role="prochaine-equipe"]', nomEquipe(vue.prochain.equipe), s);
+    }
+    $('#prochain').hidden = dernier;
+    texte('[data-role="raison-fin"]', vue.restantes === 0 ? 'Le paquet est épuisé.' : 'C\'était le dernier tour.', s);
+    const att = $('.attente-invite p', s);
+    if (att) { texte('.t-suite', prenomHote() + ' lance le tour suivant.', att); texte('.t-podium', prenomHote() + ' ouvre le podium.', att); }
+    if (nouvelle) jouerHote('score', 1.2);
+  }
+
+  /* ---------------- Fin de partie ---------------- */
+  $('#btn-rejouer').addEventListener('click', () => agir({ a: 'rejouer' }));
+  $('#btn-quitter').addEventListener('click', quitter);
+  function confettis() {
+    const box = $('#confettis'); box.innerHTML = ''; if (reduit) return;
+    const cols = ['var(--e1)', 'var(--e2)', 'var(--e3)', 'var(--e4)', 'var(--action)', 'var(--carte)'];
+    for (let i = 0; i < 28; i++) { const c = document.createElement('i'); c.style.left = (i * 3.5 + 2) + '%'; c.style.background = cols[i % cols.length]; c.style.animationDelay = ((i % 7) * .09) + 's'; c.style.rotate = (i * 37 % 90) + 'deg'; box.appendChild(c); }
+  }
+  function rendreFin(nouvelle) {
+    const s = $('#ecran-fin');
+    s.classList.toggle('est-hote', vue.moi.hote);
+    const cl = classement();
+    const rang = e => cl.filter(x => x.total > e.total).length + 1;
+    const premiers = cl.filter(e => e.total === cl[0].total);
+    s.classList.toggle('ex-aequo', premiers.length > 1);
+    texte('[data-role="equipe-gagnante"]', 'l\'' + premiers[0].nom, s);
+    texte('[data-role="equipes-ex-aequo"]', premiers.length > 1 ? 'Équipes ' + premiers.map(e => e.nom.replace('Équipe ', '')).join(premiers.length === 2 ? ' et ' : ', ') : '', s);
+    const podium = $('#podium'); podium.innerHTML = '';
+    podium.classList.remove('n2', 'n3', 'n4'); podium.classList.add('n' + Math.min(4, cl.length));
+    const top = cl.slice(0, 3);
+    const ordre = top.length === 3 ? [top[1], top[0], top[2]] : top.length === 2 ? [top[1], top[0]] : top;
+    ordre.forEach((e, i) => {
+      const r = rang(e), d = document.createElement('div');
+      d.className = 'marche r' + Math.min(3, r); d.dataset.equipe = e.id; couleurEquipe(d, e.id); d.style.setProperty('--i', i);
+      d.innerHTML = '<span class="eq"></span><div class="bloc"><span class="r"></span><span class="p"></span></div>';
+      texte('.eq', e.nom, d); texte('.r', String(r), d); texte('.p', e.total + ' pt' + (e.total > 1 ? 's' : ''), d);
+      podium.append(d);
+    });
+    const hors = $('#hors-podium'); hors.innerHTML = '';
+    cl.slice(3).forEach(e => { const li = document.createElement('li'); couleurEquipe(li, e.id); li.innerHTML = '<span class="pastille-eq"></span><span></span><b></b>'; li.children[1].innerHTML = rang(e) + '<sup>e</sup> · '; li.children[1].append(document.createTextNode(e.nom)); texte('b', String(e.total), li); hors.append(li); });
+    hors.hidden = cl.length <= 3;
+    const tb = $('#detail-points tbody'); tb.innerHTML = '';
+    cl.forEach(e => { const tr = document.createElement('tr'); couleurEquipe(tr, e.id); tr.innerHTML = '<th scope="row"><span class="pastille-eq"></span></th><td>' + e.trouvees + '</td><td>' + e.buzz + '</td><td class="total">' + e.total + '</td>'; $('th', tr).append(document.createTextNode(e.nom)); tb.append(tr); });
+    if (nouvelle) { confettis(); jouerHote('victoire', 1.5); }
+  }
+
+  /* ---------------- Aiguillage ---------------- */
+  function afficher(v) {
+    prec = vue; vue = v;
+    if (!v.moi) return;
+    decalage = v.decalage || 0;
+    $('#btn-entrer').disabled = false;
+    if (!prec && v.phase !== 'salle' && v.moi.equipe) {
+      const toast = $('#toast-retard'); texte('[data-role="equipe-attribuee"]', nomEquipe(v.moi.equipe), toast);
+      toast.classList.add('visible'); setTimeout(() => toast.classList.remove('visible'), 4000);
+    }
+    const nouvelle = !prec || prec.phase !== v.phase || (v.tour && prec.tour && prec.tour.debut !== v.tour.debut);
+    if (v.phase !== 'tour') fermerVoile();
+    switch (v.phase) {
+      case 'salle': rendreSalle(); montrer('attente'); break;
+      case 'pret': rendrePret(); montrer('pret'); break;
+      case 'tour': rendreTour(nouvelle); suivreBuzz(); break;
+      case 'finTour': rendreFinTour(nouvelle); montrer('fin-tour'); break;
+      case 'fin': rendreFin(nouvelle); montrer('fin'); break;
+    }
+  }
+
+  /* ---------------- Démarrage ---------------- */
+  function reprendre(s) { if (s.role === 'hote') demarrerHote(s.prenom, s); else demarrerInvite(s.prenom, s.code, s.cle); }
+  ['#bandeau-connexion', '#toast-retard', '#voile-buzz'].forEach(sel => { const el = $(sel); if (el) document.body.append(el); });
+  $$('.ecran').forEach(s => { s.hidden = true; });
+  const enCoursSession = window.Reseau.sessionEnCours();
+  const codeUrl = (location.hash.match(/^#([A-Za-z]{4})$/) || [])[1];
+  if (enCoursSession) { montrer('accueil'); reprendre(enCoursSession); }
+  else if (codeUrl) { ouvrirFormulaire('rejoindre'); $('#champ-code').value = codeUrl.toUpperCase(); }
+  else montrer('accueil');
+})();
+</script>
+</body>
+</html>
