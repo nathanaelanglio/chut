@@ -166,6 +166,40 @@
  sinon prend le pire cas synthétique du contrat, et mesure les DEUX écrans de carte
  (window.mesurerPireCas(cartes) renvoie la carte la plus haute et le bord libre sous
  Trouvé / Passer et sous le buzzer). À relancer quand la banque arrive.
+
+ ---------------------------------------------------------------------------------
+ MODE « UN SEUL TÉLÉPHONE » (Léa, 26/11/2026) : une option, jamais le défaut
+ ---------------------------------------------------------------------------------
+ L'accueil s'ouvre TOUJOURS sur « Plusieurs téléphones » (aucune mémorisation du choix).
+ body.un-telephone           posée quand on choisit « Un seul téléphone » à l'accueil,
+                             retirée quand on revient à « Plusieurs » ou qu'on quitte.
+   .multi-seulement          masqué en mode un seul téléphone
+   .local-seulement          masqué en mode plusieurs téléphones
+ Parcours : accueil → U1 #ecran-local-equipes → [U2 #ecran-local-passe
+            → #ecran-pret.role-parleur (existant) → U3 #ecran-local-tour
+            → #ecran-fin-tour.est-hote (existant)] × chaque tour → #ecran-fin.est-hote.
+ #ecran-tour-parleur, -equipe et -adverse ne s'affichent jamais dans ce mode.
+ QUI SURVEILLE : une seule équipe adverse par tour, nommée sur U2 et sur le buzzer de U3
+ (sur un téléphone, une seule personne peut lire par-dessus l'épaule). Le buzz lui
+ donne +1, sans question à poser pendant que le chrono tourne. À 2 équipes : l'autre.
+ À 3 ou 4 : l'équipe qui joue au tour suivant (elle est déjà à côté pour reprendre le
+ téléphone). Le moteur écrit son nom dans [data-role="equipe-surveille"].
+ Classes d'état du mode :
+ #local-equipes .equipe-locale (e1 à e4, --e)   .pas du nombre de personnes (2 à 8) et
+                             un champ de prénom FACULTATIF par personne (le nombre sert
+                             au compte des tours : « chacun fait deviner N fois »)
+ #btn-local-lancer[disabled] + #raison-local     plus de 16 personnes en tout
+ #ecran-local-passe.sans-prenom   « quelqu'un de l'Équipe 2 » à la place du prénom
+ #ecran-local-tour           mêmes classes que #ecran-tour-parleur : .gaucher,
+                             .derniere-carte, .fin-proche, .temps-ecoule, .buzz-en-cours
+ #btn-buzz-local             le buzzer de U3 ; [disabled] pendant le voile
+ #voile-buzz.vue-local       textes du voile en mode un seul téléphone (équipe, pas de prénom)
+ Fin du tour : « Moïse <small>par l'Équipe 4</small> » (pas de prénom de buzzeur).
+ ⛔ SECRET sur un seul appareil : U2 n'affiche AUCUNE carte. La carte n'apparaît qu'au
+ « Go », quand le téléphone est dans la main de qui fait deviner.
+ Sons en mode un seul téléphone : tous jouent sur cet appareil (go, trouve, passer,
+ buzzer, tic, fin-temps, score, victoire) ; buzz-refuse et entree : jamais.
+ Vibration au buzz : 60-40-60 (le téléphone est dans la main de qui fait deviner).
 =====================================================================================
 -->
 <link rel="preconnect" href="https://fonts.googleapis.com">
@@ -394,7 +428,7 @@ body::before{
   background:var(--carte);color:var(--encre);font:700 1.125rem/1 var(--police);
   box-shadow:inset 0 3px 0 rgba(19,32,31,.12),0 4px 0 var(--carte-levre);
 }
-.saisie::placeholder{color:#6E7C79;font-weight:600}
+.saisie::placeholder{color:#5C6966;font-weight:600} /* 5,3:1 sur la carte (l'ancien #6E7C79 faisait 4,00) : « Prénom (facultatif) » porte une information */
 .saisie:focus{outline:none;border-color:var(--action-levre)}
 .saisie-code{min-height:84px;text-align:center;text-transform:uppercase;font:800 2.75rem/1 var(--police-titre);letter-spacing:.42em;padding-left:.42em}
 .saisie.refusee{border-color:var(--urgence)}
@@ -811,6 +845,86 @@ body > .bandeau{
 }
 body > .bandeau.visible{pointer-events:auto}
 
+/* ---------- Mode « un seul téléphone » ---------- */
+body:not(.un-telephone) .local-seulement{display:none!important}
+body.un-telephone .multi-seulement{display:none!important}
+/* Accueil : deux grandes pièces, l'icône doublée du mot */
+.choix-mode{display:grid;grid-template-columns:1fr 1fr;gap:6px;padding:5px;border-radius:20px;background:var(--panneau-levre)}
+.choix-mode label{position:relative;min-width:0}
+.choix-mode input{position:absolute;inset:0;opacity:0;margin:0;cursor:pointer;z-index:1}
+.choix-mode span{display:flex;align-items:center;justify-content:center;gap:8px;min-height:54px;padding:6px 8px;border-radius:15px;text-align:left;font:700 .9375rem/1.15 var(--police);color:var(--texte-doux)}
+.choix-mode svg{width:24px;height:24px;flex:none}
+.choix-mode input:checked + span{background:var(--carte);color:var(--encre);box-shadow:0 3px 0 var(--carte-levre)}
+.choix-mode input:focus-visible + span{outline:3px solid var(--focus);outline-offset:2px}
+/* Le choix ajoute 76 px à l'accueil : la photo cède la place, pour que tout tienne sans défiler à 375 × 812 */
+@media (max-height:860px) and (min-height:741px){#ecran-accueil .cadre-photo{width:min(100%,280px)}}
+/* Arrêter une partie locale (26/11) : un lien discret, puis une confirmation dessinée dans l'écran
+   (confirm() ne s'affiche pas). .ecran.arret-demande montre la confirmation et masque .masque-si-arret. */
+.confirmer-arret{display:none;gap:12px;padding:14px 16px;border-radius:var(--rayon-m);background:var(--panneau);border:2px solid var(--alerte)}
+.ecran.arret-demande .confirmer-arret{display:grid}
+.ecran.arret-demande .masque-si-arret{display:none}
+.confirmer-arret p{margin:0;color:var(--texte-doux)}
+.confirmer-arret strong{display:block;color:var(--texte);font:800 1.125rem/1.2 var(--police-titre)}
+.deux-boutons{display:grid;grid-template-columns:1fr 1fr;gap:10px}
+.passe .vers{text-wrap:balance}
+.titre-mode{display:inline-flex;align-items:center;gap:6px}
+.titre-mode svg{width:20px;height:20px;color:var(--action)}
+/* Équipes sur un seul téléphone : une carte par équipe, prénoms facultatifs */
+.equipes-locales{display:grid;gap:12px}
+.equipe-locale{--e:var(--e1);min-width:0;border-radius:18px;background:var(--panneau-clair);overflow:hidden;box-shadow:0 4px 0 var(--panneau-levre)}
+.equipe-locale .corps{display:grid;gap:8px;padding:8px 12px 12px}
+.ligne-nb{display:flex;align-items:center;gap:12px;min-height:52px}
+.ligne-nb .lib-reglage{flex:1;min-width:0}
+.liste-saisie{list-style:none;margin:0;padding:0;display:grid;gap:8px}
+.liste-saisie .saisie{min-height:48px;padding:0 14px;font-size:1rem}
+.raison{margin:0;text-align:center;font-size:.9375rem;font-weight:700;color:var(--alerte)}
+/* Passez le téléphone : aucune carte, rien qu'un prénom */
+#ecran-local-passe{text-align:center}
+.passe{flex:1;display:grid;align-content:center;justify-items:center;gap:14px}
+.passe .vers{margin:0;font:800 1.25rem/1.2 var(--police-titre);color:var(--texte-doux)}
+.prenom-geant{margin:0;max-width:100%;font:800 clamp(2.5rem,13vw,3.5rem)/1 var(--police-titre);letter-spacing:-.03em;overflow-wrap:anywhere}
+#ecran-local-passe .t-sans-prenom{display:none}
+#ecran-local-passe.sans-prenom .t-sans-prenom{display:block}
+#ecran-local-passe.sans-prenom .t-avec-prenom{display:none}
+.consignes{display:grid;gap:10px;width:100%}
+.consigne-secret{display:flex;align-items:center;gap:12px;width:100%;padding:14px 16px;border-radius:var(--rayon-m);background:var(--panneau);border:2px dashed var(--filet);text-align:left}
+.consigne-secret svg{width:30px;height:30px;flex:none;color:var(--action)}
+.consigne-secret.rouge{border-color:var(--buzz-levre)}
+.consigne-secret.rouge svg{color:var(--urgence-texte)}
+.consigne-secret p{margin:0;color:var(--texte-doux)}
+.consigne-secret strong{display:block;color:var(--texte);font:800 1.0625rem/1.2 var(--police-titre)}
+/* U3 : le tour sur un seul téléphone. Le buzzer est EN HAUT, loin des pouces de qui
+   fait deviner (Trouvé / Passer en bas) : la main de l'adversaire arrive par-dessus. */
+#ecran-local-tour{gap:10px;padding-block:12px 14px}
+.buzz-local{
+  position:relative;width:100%;min-height:96px;border:0;border-radius:26px;margin-bottom:8px;
+  display:flex;align-items:center;justify-content:center;gap:14px;padding:10px 16px;text-align:left;
+  background:radial-gradient(90% 120% at 50% 20%,#FF7A70 0%,var(--buzz) 65%);color:var(--encre);
+  box-shadow:var(--reflet),0 8px 0 var(--buzz-levre),0 0 0 6px var(--buzz-anneau);
+  touch-action:manipulation;-webkit-user-select:none;user-select:none;
+  transition:transform 90ms ease,box-shadow 90ms ease
+}
+.buzz-local .mot-buzz{font:800 clamp(2.25rem,11vw,2.75rem)/.9 var(--police-titre);letter-spacing:-.03em;flex:none}
+.buzz-local .aide-buzz{font:700 .9375rem/1.25 var(--police);min-width:0}
+.buzz-local .aide-buzz b{display:block;font:800 1rem/1.2 var(--police-titre)}
+.buzz-local:active,.buzz-local.enfonce{transform:translateY(6px);box-shadow:var(--reflet),0 2px 0 var(--buzz-levre),0 0 0 6px var(--buzz-anneau)}
+.buzz-local.enfonce{animation:a-enfonce 160ms ease-out}
+.buzz-local[disabled]{opacity:.4;cursor:not-allowed;transform:none}
+.ecran.buzz-en-cours .buzz-local{pointer-events:none}
+#ecran-local-tour.derniere-carte .note-derniere{display:block}
+#ecran-local-tour.gaucher .duo-pouce{grid-template-columns:1.35fr 1fr}
+#ecran-local-tour.gaucher #btn-trouve-local{order:-1}
+/* Écran court : tout le tour tient sans défiler, buzzer et pouces compris */
+@media (max-height:740px){
+  #ecran-local-tour{gap:8px;padding-block:10px 12px}
+  .buzz-local{min-height:74px;margin-bottom:4px}
+  .buzz-local .aide-buzz > span{display:none} /* enfant direct seulement : le nom d'équipe, dans le <b>, reste (26/11) */
+  #ecran-local-tour .btn-pouce{min-height:100px}
+}
+/* Voile du buzz, vue « un seul téléphone » : l'équipe, jamais un prénom */
+.voile-buzz.vue-local .t-tous{display:none}
+.voile-buzz.vue-local .t-local{display:inline}
+
 /* ---------- Animations ---------- */
 @keyframes a-apparait{from{opacity:0;transform:translateY(14px)}to{opacity:1;transform:none}}
 @keyframes a-gue{0%{opacity:0;transform:translateY(-26px) scale(.7)}100%{opacity:1;transform:none}}
@@ -866,6 +980,8 @@ body > .bandeau.visible{pointer-events:auto}
     <symbol id="i-groupe" viewBox="0 0 24 24"><g fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><circle cx="9" cy="8" r="3.5"/><path d="M2.5 20a6.5 6.5 0 0 1 13 0"/><circle cx="17" cy="9" r="2.5"/><path d="M17 14a5 5 0 0 1 4.5 5"/></g></symbol>
     <symbol id="i-wifi" viewBox="0 0 24 24"><g fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round"><path d="M2 8.5a15 15 0 0 1 20 0M5.5 12a10 10 0 0 1 13 0M9 15.5a5 5 0 0 1 6 0"/><circle cx="12" cy="19" r="1.2" fill="currentColor"/><path d="M3 3l18 18"/></g></symbol>
     <symbol id="i-recharge" viewBox="0 0 24 24"><g fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round"><path d="M20 12a8 8 0 1 1-2.3-5.6"/><path d="M20 4v5h-5"/></g></symbol>
+    <symbol id="i-tel" viewBox="0 0 24 24"><g fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><rect x="7" y="2.5" width="10" height="19" rx="2.5"/><path d="M11 18h2"/></g></symbol>
+    <symbol id="i-tels" viewBox="0 0 24 24"><g fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><rect x="2.5" y="5" width="8" height="15" rx="2"/><rect x="13.5" y="3" width="8" height="15" rx="2"/><path d="M5.8 17h1.4M16.8 15h1.4"/></g></symbol>
     <symbol id="i-couronne" viewBox="0 0 24 24"><path d="M3 8l4.5 4L12 5l4.5 7L21 8l-2 11H5Z" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linejoin="round"/></symbol>
   </defs>
 </svg>
@@ -886,10 +1002,16 @@ body > .bandeau.visible{pointer-events:auto}
     <p class="accroche">Faites deviner un mot de la Bible sans dire les cinq mots interdits. Les adversaires ont le doigt sur le buzzer.</p>
   </div>
   <div class="bas">
-    <button class="btn btn-action" id="btn-creer" type="button">Créer une partie</button>
-    <button class="btn btn-carte" id="btn-rejoindre" type="button">Rejoindre</button>
+    <div class="choix-mode" id="choix-mode" role="radiogroup" aria-label="Comment jouez-vous ?">
+      <label><input type="radio" name="mode-jeu" value="plusieurs" id="mode-plusieurs" checked><span><svg aria-hidden="true"><use href="#i-tels"/></svg>Plusieurs téléphones</span></label>
+      <label><input type="radio" name="mode-jeu" value="un" id="mode-un"><span><svg aria-hidden="true"><use href="#i-tel"/></svg>Un seul téléphone</span></label>
+    </div>
+    <button class="btn btn-action multi-seulement" id="btn-creer" type="button">Créer une partie</button>
+    <button class="btn btn-carte multi-seulement" id="btn-rejoindre" type="button">Rejoindre</button>
+    <button class="btn btn-action local-seulement" id="btn-local-commencer" type="button">Commencer une partie</button>
     <button class="btn btn-lien" id="btn-regles" type="button">Règles du jeu</button>
-    <p class="mention-bas">En équipes, chacun sur son téléphone · de 4 à 16 personnes</p>
+    <p class="mention-bas multi-seulement">En équipes, chacun sur son téléphone · de 4 à 16 personnes</p>
+    <p class="mention-bas local-seulement">En équipes, un téléphone qui passe de main en main · de 4 à 16 personnes</p>
   </div>
 </section>
 
@@ -1163,8 +1285,10 @@ body > .bandeau.visible{pointer-events:auto}
       <span class="t-vue t-buzzeur">Bien vu !</span>
       <span class="t-vue t-parleur">Buzz sur votre carte</span>
       <span class="t-vue t-trop-tard">Trop tard</span>
+      <span class="t-vue t-local">Carte perdue</span>
     </p>
     <p class="voile-qui">
+      <span class="t-vue t-local">Faute repérée :</span>
       <span class="t-vue t-tous t-parleur"><b data-role="nom-buzzeur">Lydie</b> a buzzé :</span>
       <span class="t-vue t-buzzeur">Vous avez buzzé :</span>
       <span class="t-vue t-trop-tard"><b data-role="nom-buzzeur">Lydie</b> a buzzé avant vous :</span>
@@ -1265,7 +1389,8 @@ body > .bandeau.visible{pointer-events:auto}
   </div>
   <div class="plateau regle">
     <h3><span class="n">1</span>Les équipes</h3>
-    <p>De 2 à 4 équipes, au moins 2 personnes chacune, 16 au plus. Chacun rejoint la partie avec le code de l'hôte.</p>
+    <p class="multi-seulement">De 2 à 4 équipes, au moins 2 personnes chacune, 16 au plus. Chacun rejoint la partie avec le code de l'hôte.</p>
+    <p class="local-seulement">De 2 à 4 équipes, au moins 2 personnes chacune, 16 au plus. Un seul téléphone passe de main en main : il va toujours à qui fait deviner.</p>
   </div>
   <div class="plateau regle">
     <h3><span class="n">2</span>La carte</h3>
@@ -1280,8 +1405,10 @@ body > .bandeau.visible{pointer-events:auto}
     <h3><span class="n">3</span>Un tour</h3>
     <ul class="roles-regle">
       <li><svg><use href="#i-bulle"/></svg><span><strong>Qui fait deviner</strong> touche «&nbsp;Trouvé&nbsp;» (1 point) ou «&nbsp;Passer&nbsp;» (carte perdue, sans point).</span></li>
-      <li><svg><use href="#i-oreille"/></svg><span><strong>Son équipe</strong> ne voit que le chrono, et devine à voix haute.</span></li>
-      <li><svg class="rouge"><use href="#i-buzz"/></svg><span><strong>Les adversaires</strong> voient la carte. À la moindre faute, ils buzzent : la carte est perdue et leur équipe gagne 1 point. Si deux personnes buzzent, seule la première compte.</span></li>
+      <li class="multi-seulement"><svg><use href="#i-oreille"/></svg><span><strong>Son équipe</strong> ne voit que le chrono, et devine à voix haute.</span></li>
+      <li class="multi-seulement"><svg class="rouge"><use href="#i-buzz"/></svg><span><strong>Les adversaires</strong> voient la carte. À la moindre faute, ils buzzent : la carte est perdue et leur équipe gagne 1 point. Si deux personnes buzzent, seule la première compte.</span></li>
+      <li class="local-seulement"><svg><use href="#i-oreille"/></svg><span><strong>Son équipe</strong> ne regarde pas l'écran, et devine à voix haute.</span></li>
+      <li class="local-seulement"><svg class="rouge"><use href="#i-buzz"/></svg><span><strong>Une équipe adverse</strong> surveille par-dessus son épaule. À la moindre faute, elle touche «&nbsp;Buzz&nbsp;» en haut de l'écran : la carte est perdue et elle gagne 1 point.</span></li>
     </ul>
   </div>
   <div class="plateau regle">
@@ -1316,6 +1443,170 @@ body > .bandeau.visible{pointer-events:auto}
     <h2>Connexion perdue</h2>
     <p>Vérifiez le Wi-Fi ou les données mobiles. Nous essayons de vous reconnecter ; la partie vous attend.</p>
     <button class="btn btn-action" id="btn-reessayer" type="button">Réessayer</button>
+  </div>
+</section>
+
+<!-- ============================================================ U1. LES ÉQUIPES -->
+<section class="ecran" id="ecran-local-equipes" aria-labelledby="titre-local-equipes">
+  <div class="barre">
+    <button class="btn-rond" id="btn-local-retour" type="button" aria-label="Retour à l'accueil"><svg><use href="#i-retour"/></svg></button>
+    <span class="titre-barre titre-mode"><svg aria-hidden="true"><use href="#i-tel"/></svg> Un seul téléphone</span>
+  </div>
+  <div>
+    <h2 class="h-ecran" id="titre-local-equipes">Les équipes</h2>
+    <p class="sous">Les prénoms sont facultatifs : ils servent à savoir à qui passer le téléphone.</p>
+  </div>
+
+  <div class="plateau">
+    <div class="reglage">
+      <div class="lib"><span class="lib-reglage" id="lib-local-equipes">Équipes</span><small>De 2 à 4</small></div>
+      <div class="pas" id="local-reglage-equipes" role="group" aria-labelledby="lib-local-equipes">
+        <button type="button" id="local-equipes-moins" aria-label="Une équipe de moins" disabled>−</button>
+        <span class="valeur" id="local-equipes-valeur" aria-live="polite">2</span>
+        <button type="button" id="local-equipes-plus" aria-label="Une équipe de plus">+</button>
+      </div>
+    </div>
+  </div>
+
+  <div class="equipes-locales" id="local-equipes">
+    <div class="equipe-locale" data-equipe="e1" style="--e:var(--e1)">
+      <div class="equipe-tete"><strong data-role="nom-equipe">Équipe 1</strong><span class="nb" data-role="nb">3 personnes</span></div>
+      <div class="corps">
+        <div class="ligne-nb">
+          <span class="lib-reglage" id="lib-local-nb-e1">Personnes</span>
+          <div class="pas" role="group" aria-labelledby="lib-local-nb-e1">
+            <button type="button" aria-label="Une personne de moins dans l'Équipe 1">−</button>
+            <span class="valeur" aria-live="polite">3</span>
+            <button type="button" aria-label="Une personne de plus dans l'Équipe 1">+</button>
+          </div>
+        </div>
+        <ul class="liste-saisie" data-role="prenoms">
+          <li><input class="saisie" type="text" maxlength="16" autocomplete="off" aria-label="Équipe 1, prénom 1 (facultatif)" placeholder="Prénom (facultatif)" value="Sarah"></li>
+          <li><input class="saisie" type="text" maxlength="16" autocomplete="off" aria-label="Équipe 1, prénom 2 (facultatif)" placeholder="Prénom (facultatif)" value="Maëlle"></li>
+          <li><input class="saisie" type="text" maxlength="16" autocomplete="off" aria-label="Équipe 1, prénom 3 (facultatif)" placeholder="Prénom (facultatif)" value=""></li>
+        </ul>
+      </div>
+    </div>
+    <div class="equipe-locale" data-equipe="e2" style="--e:var(--e2)">
+      <div class="equipe-tete"><strong data-role="nom-equipe">Équipe 2</strong><span class="nb" data-role="nb">2 personnes</span></div>
+      <div class="corps">
+        <div class="ligne-nb">
+          <span class="lib-reglage" id="lib-local-nb-e2">Personnes</span>
+          <div class="pas" role="group" aria-labelledby="lib-local-nb-e2">
+            <button type="button" aria-label="Une personne de moins dans l'Équipe 2" disabled>−</button>
+            <span class="valeur" aria-live="polite">2</span>
+            <button type="button" aria-label="Une personne de plus dans l'Équipe 2">+</button>
+          </div>
+        </div>
+        <ul class="liste-saisie" data-role="prenoms">
+          <li><input class="saisie" type="text" maxlength="16" autocomplete="off" aria-label="Équipe 2, prénom 1 (facultatif)" placeholder="Prénom (facultatif)" value="Gabriel"></li>
+          <li><input class="saisie" type="text" maxlength="16" autocomplete="off" aria-label="Équipe 2, prénom 2 (facultatif)" placeholder="Prénom (facultatif)" value="Inès"></li>
+        </ul>
+      </div>
+    </div>
+  </div>
+
+  <div class="plateau" id="local-reglages">
+    <div class="tete-liste"><h2>Réglages</h2></div>
+    <div class="reglage-col">
+      <span class="lib-reglage" id="lib-local-duree">Durée d'un tour</span>
+      <div class="segments" id="local-reglage-duree" role="radiogroup" aria-labelledby="lib-local-duree">
+        <label><input type="radio" name="local-duree" value="45"><span>45 s</span></label>
+        <label><input type="radio" name="local-duree" value="60" checked><span>60 s</span></label>
+        <label><input type="radio" name="local-duree" value="90"><span>90 s</span></label>
+      </div>
+    </div>
+    <div class="reglage-col">
+      <span class="lib-reglage" id="lib-local-tours">Tours par personne</span>
+      <small>Chacun fait deviner une ou deux fois.</small>
+      <div class="segments n2" id="local-reglage-tours" role="radiogroup" aria-labelledby="lib-local-tours">
+        <label><input type="radio" name="local-tours" value="1" checked><span>1 fois</span></label>
+        <label><input type="radio" name="local-tours" value="2"><span>2 fois</span></label>
+      </div>
+    </div>
+    <div class="reglage-col">
+      <span class="lib-reglage" id="lib-local-difficulte">Difficulté</span>
+      <div class="segments n4" id="local-reglage-difficulte" role="radiogroup" aria-labelledby="lib-local-difficulte">
+        <label><input type="radio" name="local-difficulte" value="toutes" checked><span>Toutes</span></label>
+        <label><input type="radio" name="local-difficulte" value="facile"><span>Facile</span></label>
+        <label><input type="radio" name="local-difficulte" value="moyen"><span>Moyen</span></label>
+        <label><input type="radio" name="local-difficulte" value="difficile"><span>Difficile</span></label>
+      </div>
+    </div>
+  </div>
+
+  <div class="bas">
+    <p class="raison" id="raison-local" data-role="raison-local"></p>
+    <button class="btn btn-action" id="btn-local-lancer" type="button">Lancer la partie</button>
+  </div>
+</section>
+
+<!-- ============================================================ U2. PASSEZ LE TÉLÉPHONE -->
+<section class="ecran" id="ecran-local-passe" aria-labelledby="titre-local-passe">
+  <div class="barre">
+    <span class="puce"><span data-role="ronde">Ronde 2 sur 4</span></span>
+    <div class="droite"><span class="puce puce-equipe" style="--e:var(--e2)" data-role="equipe-du-tour">Équipe 2</span></div>
+  </div>
+  <div class="passe">
+    <p class="vers" id="titre-local-passe"><span class="t-avec-prenom">Passez le téléphone à</span><span class="t-sans-prenom">Passez le téléphone à quelqu'un de</span></p>
+    <span class="pastille grande t-avec-prenom" style="--j:var(--j4)" data-role="pastille-parleur">G</span>
+    <p class="prenom-geant"><span class="t-avec-prenom" data-role="nom-parleur">Gabriel</span><span class="t-sans-prenom">l'<span data-role="nom-equipe">Équipe 2</span></span></p>
+    <p class="sous t-sans-prenom">Pas la même personne qu'au dernier tour de l'équipe.</p>
+  </div>
+  <div class="consignes">
+    <div class="consigne-secret">
+      <svg aria-hidden="true"><use href="#i-oreille"/></svg>
+      <p><strong>L'<span data-role="nom-equipe">Équipe 2</span> ne regarde pas l'écran</strong>Elle devine à voix haute.</p>
+    </div>
+    <div class="consigne-secret rouge">
+      <svg aria-hidden="true"><use href="#i-buzz"/></svg>
+      <p><strong>L'<span data-role="equipe-surveille">Équipe 1</span> surveille</strong>Une personne se place à côté, regarde l'écran par-dessus l'épaule et garde le doigt près de «&nbsp;Buzz&nbsp;».</p>
+    </div>
+  </div>
+  <div class="bas">
+    <button class="btn btn-action masque-si-arret" id="btn-cest-moi" type="button">C'est moi : je fais deviner</button>
+    <button class="btn btn-lien btn-arreter masque-si-arret" type="button">Arrêter la partie</button>
+    <div class="confirmer-arret" role="group" aria-label="Arrêter la partie ?">
+      <p><strong>Arrêter la partie ?</strong>La partie en cours sera perdue.</p>
+      <div class="deux-boutons">
+        <button class="btn btn-second btn-arret-oui" type="button">Arrêter</button>
+        <button class="btn btn-action btn-arret-non" type="button">Continuer</button>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ============================================================ U3. LE TOUR SUR UN SEUL TÉLÉPHONE -->
+<section class="ecran" id="ecran-local-tour" aria-labelledby="titre-local-tour">
+  <h2 class="vh" id="titre-local-tour">Faites deviner, sous surveillance</h2>
+  <button class="buzz-local" id="btn-buzz-local" type="button" aria-describedby="aide-buzz-local">
+    <span class="mot-buzz">BUZZ</span>
+    <span class="aide-buzz" id="aide-buzz-local"><b>Pour l'<span data-role="equipe-surveille">Équipe 1</span></b><span>Mot interdit, de la famille ou geste</span></span>
+  </button>
+  <div class="barre">
+    <span class="puce puce-equipe" style="--e:var(--e2)" data-role="equipe-du-tour">Équipe 2</span>
+    <div class="droite compteurs">
+      <span class="compteur c-trouve"><svg><use href="#i-coche"/></svg><b data-role="nb-trouvees">4</b><span class="vh">trouvées</span></span>
+      <span class="compteur c-buzz"><svg><use href="#i-buzz"/></svg><b data-role="nb-buzzees">1</b><span class="vh">buzzées</span></span>
+    </div>
+  </div>
+  <div class="chrono" data-role="chrono" role="timer" aria-label="Temps restant">
+    <div class="chrono-ligne"><span class="chrono-chiffres" data-role="secondes">23</span><span class="chrono-unite">s</span></div>
+    <div class="chrono-rail"><span class="chrono-reste" data-role="reste" style="--reste:.38"></span></div>
+    <span class="chrono-alerte">Dernières secondes</span>
+  </div>
+  <div class="zone-carte">
+    <div class="carte-jeu" id="carte-local" data-role="carte" aria-live="polite">
+      <div class="carte-tete"><span class="filet-mot" aria-hidden="true"></span><span class="mot-carte" data-role="mot">Moïse</span></div>
+      <ul class="interdits" data-role="interdits" aria-label="Mots interdits">
+        <li>Égypte</li><li>Mer Rouge</li><li>Tables de la Loi</li><li>Pharaon</li><li>Buisson</li>
+      </ul>
+    </div>
+  </div>
+  <p class="note-derniere">Dernière carte : on ne peut plus passer.</p>
+  <div class="duo-pouce">
+    <button class="btn btn-pouce btn-passer" id="btn-passer-local" type="button"><svg><use href="#i-passer"/></svg>Passer</button>
+    <button class="btn btn-pouce btn-trouve" id="btn-trouve-local" type="button"><svg><use href="#i-coche"/></svg>Trouvé</button>
   </div>
 </section>
 
@@ -1588,6 +1879,20 @@ body > .bandeau.visible{pointer-events:auto}
     return 'adverse';
   }
 
+  /* Mode un seul téléphone : une seule équipe surveille par tour. À 2 équipes, l'autre ;
+     à 3 ou 4, celle qui joue au tour suivant (même ordre que preparerTour, équipes vides sautées). */
+  function equipeQuiSurveille(etat) {
+    if (!etat.tour) return null;
+    const eqs = equipesActives(etat);
+    const i = eqs.findIndex(e => e.id === etat.tour.equipe);
+    if (i < 0) return null;
+    for (let k = 1; k < eqs.length; k++) {
+      const e = eqs[(i + k) % eqs.length];
+      if (membres(etat, e.id).length) return e.id;
+    }
+    return null;
+  }
+
   function carteDe(etat, id) { const c = etat.cartes[id]; return c ? { id, mot: c.mot, interdits: c.interdits.slice() } : null; }
   function mot(etat, id) { return etat.cartes[id] ? etat.cartes[id].mot : ''; }
 
@@ -1628,7 +1933,7 @@ body > .bandeau.visible{pointer-events:auto}
     };
   }
 
-  const Logique = { nouvelEtat, ajouterJoueur, retirerJoueur, regler, choisirEquipe, melangerEquipes, peutLancer, lancer, suite, go, trouve, passer, buzzer, tic, totaux, rejouer, vueDe, EQUIPES, MAX_JOUEURS, DUREES, TOURS, DUREE_BUZZ };
+  const Logique = { nouvelEtat, ajouterJoueur, retirerJoueur, regler, choisirEquipe, melangerEquipes, peutLancer, lancer, suite, go, trouve, passer, buzzer, tic, totaux, rejouer, vueDe, equipeQuiSurveille, EQUIPES, MAX_JOUEURS, DUREES, TOURS, DUREE_BUZZ };
   if (typeof module !== 'undefined' && module.exports) module.exports = Logique;
   else racine.Logique = Logique;
 })(typeof window !== 'undefined' ? window : globalThis);
@@ -1854,7 +2159,7 @@ body > .bandeau.visible{pointer-events:auto}
     if (n === 'buzzer') buzzerJusque = t + tampons[n].duration * 1000;
   }
   function jouerHote(n, delai) { if (vue && vue.moi && vue.moi.hote) jouer(n, delai); }
-  const SONS_PROPRES = ['btn-trouve', 'btn-passer', 'btn-go', 'btn-go-secours', 'btn-buzzer'];
+  const SONS_PROPRES = ['btn-trouve', 'btn-passer', 'btn-go', 'btn-go-secours', 'btn-buzzer', 'btn-trouve-local', 'btn-passer-local', 'btn-buzz-local'];
   document.addEventListener('pointerup', e => {
     const b = e.target.closest('.btn, .btn-rond, .pas button, .btn-go');
     if (b && !b.disabled && !SONS_PROPRES.includes(b.id)) jouer('clic');
@@ -1950,7 +2255,7 @@ body > .bandeau.visible{pointer-events:auto}
   function demarrerInvite(prenom, code, cle) { fermerSession(); session = new window.Reseau.Invite(Object.assign(rappels(), { prenom, code, cle })); }
   function fermerSession() { if (session) { try { session.quitter(); } catch (e) { } } session = null; vue = null; prec = null; }
   function agir(m) { if (session) session.agir(m); }
-  function quitter() { fermerSession(); window.Reseau.oublier(); $('#bandeau-connexion').classList.remove('visible'); fermerVoile(); montrer('accueil'); }
+  function quitter() { fermerSession(); window.Reseau.oublier(); $('#bandeau-connexion').classList.remove('visible'); fermerVoile(); choisirMode('plusieurs'); montrer('accueil'); }
   function montrerErreur(code) {
     $('#btn-entrer').disabled = false;
     if (code === 'pas-assez' || code === 'sans-equipe' || code === 'equipe-incomplete') return;
@@ -2044,7 +2349,7 @@ body > .bandeau.visible{pointer-events:auto}
   $('#btn-go').addEventListener('click', () => { jouer('go'); serie = 0; agir({ a: 'go' }); });
   $('#btn-go-secours').addEventListener('click', () => { jouer('go'); serie = 0; agir({ a: 'go' }); });
   $('#reglage-gaucher').checked = gaucher;
-  $('#reglage-gaucher').addEventListener('change', e => { gaucher = e.target.checked; try { localStorage.setItem('schib-gaucher', gaucher ? '1' : '0'); } catch (err) { } $('#ecran-tour-parleur').classList.toggle('gaucher', gaucher); });
+  $('#reglage-gaucher').addEventListener('change', e => { gaucher = e.target.checked; try { localStorage.setItem('schib-gaucher', gaucher ? '1' : '0'); } catch (err) { } $('#ecran-tour-parleur').classList.toggle('gaucher', gaucher); $('#ecran-local-tour').classList.toggle('gaucher', gaucher); });
   function ronde() { return 'Ronde ' + Math.min(vue.ronde, vue.nbRondes) + ' sur ' + vue.nbRondes; }
   function rendrePret() {
     const s = $('#ecran-pret'), t = vue.tour, role = vue.role;
@@ -2066,9 +2371,9 @@ body > .bandeau.visible{pointer-events:auto}
 
   /* ---------------- Tour ---------------- */
   let attenteSortie = null, carteAffichee = null;
-  function sortie(cls) {
+  function sortie(cls, idCarte) {
     if (reduit) return;
-    const c = $('#carte-tour');
+    const c = document.getElementById(idCarte || 'carte-tour');
     c.classList.remove('entre', 'sort-trouve', 'sort-passe', 'sort-buzz'); void c.offsetWidth; c.classList.add(cls);
     attenteSortie = performance.now();
   }
@@ -2095,7 +2400,7 @@ body > .bandeau.visible{pointer-events:auto}
       tailler(el, carte);
       if (animer && !reduit) rejoue(el, 'entre');
     };
-    if (el.id === 'carte-tour') {
+    if (el.id === 'carte-tour' || el.id === 'carte-local') {
       if (carteAffichee === carte.id) return;
       carteAffichee = carte.id;
       const ecoule = attenteSortie ? performance.now() - attenteSortie : 999; attenteSortie = null;
@@ -2130,8 +2435,9 @@ body > .bandeau.visible{pointer-events:auto}
   let voileN = null, voileMinuteur = null;
   function majVoile() {
     const v = $('#voile-buzz'), b = vue && vue.tour && vue.tour.buzz;
-    v.classList.remove('vue-buzzeur', 'vue-parleur', 'vue-trop-tard');
-    if (tropTard) v.classList.add('vue-trop-tard');
+    v.classList.remove('vue-buzzeur', 'vue-parleur', 'vue-trop-tard', 'vue-local');
+    if (vue && vue.local) v.classList.add('vue-local');
+    else if (tropTard) v.classList.add('vue-trop-tard');
     else if (b && vue.moi && b.par === vue.moi.cle) v.classList.add('vue-buzzeur');
     else if (b && vue.tour && vue.tour.parleur === vue.moi.cle) v.classList.add('vue-parleur');
   }
@@ -2144,15 +2450,15 @@ body > .bandeau.visible{pointer-events:auto}
     v.classList.add('visible');
     clearTimeout(voileMinuteur);
     const reste = Math.max(400, b.jusque - (Date.now() + decalage));
-    voileMinuteur = setTimeout(() => { fermerVoile(); if (vue && vue.phase === 'tour') rendreTour(false); }, reste);
+    voileMinuteur = setTimeout(() => { fermerVoile(); if (vue && vue.phase === 'tour') { if (vue.local) rendreTourLocal(false); else rendreTour(false); } }, reste);
   }
-  function fermerVoile() { $('#voile-buzz').classList.remove('visible', 'vue-buzzeur', 'vue-parleur', 'vue-trop-tard'); tropTard = false; }
+  function fermerVoile() { $('#voile-buzz').classList.remove('visible', 'vue-buzzeur', 'vue-parleur', 'vue-trop-tard', 'vue-local'); tropTard = false; }
   function suivreBuzz() {
     const b = vue.tour && vue.tour.buzz;
     if (!b || b.n === voileN) return;
     voileN = b.n;
     serie = 0;
-    if (vue.tour.parleur === vue.moi.cle) { jouer('buzzer'); vibrer([60, 40, 60]); if (!reduit) { const c = $('#carte-tour'); c.classList.remove('entre'); void c.offsetWidth; c.classList.add('sort-buzz'); attenteSortie = performance.now() + 80; } }
+    if (vue.tour.parleur === vue.moi.cle) { jouer('buzzer'); vibrer([60, 40, 60]); if (!reduit) { const c = $(vue.local ? '#carte-local' : '#carte-tour'); c.classList.remove('entre'); void c.offsetWidth; c.classList.add('sort-buzz'); attenteSortie = performance.now() + 80; } }
     ouvrirVoile(b);
   }
 
@@ -2166,7 +2472,7 @@ body > .bandeau.visible{pointer-events:auto}
     const part = Math.max(0, Math.min(1, reste / (vue.reglages.duree * 1000)));
     $$('[data-role="secondes"]').forEach(e => { if (e.textContent !== String(sec)) { e.textContent = String(sec); if (sec <= 5 && sec > 0 && !reduit) rejoue(e, 'chrono-chiffres'); } });
     $$('.chrono-reste').forEach(e => e.style.setProperty('--reste', part.toFixed(3)));
-    $$('#ecran-tour-parleur, #ecran-tour-equipe, #ecran-tour-adverse').forEach(s => { s.classList.toggle('fin-proche', sec <= 5 && sec > 0); s.classList.toggle('temps-ecoule', sec === 0); });
+    $$('#ecran-tour-parleur, #ecran-tour-equipe, #ecran-tour-adverse, #ecran-local-tour').forEach(s => { s.classList.toggle('fin-proche', sec <= 5 && sec > 0); s.classList.toggle('temps-ecoule', sec === 0); });
     if (vue.role === 'parleur') {
       if (sec <= 5 && sec >= 1 && dernierTic !== t.fin + ':' + sec) { dernierTic = t.fin + ':' + sec; jouer('tic'); }
       if (sec === 0 && finJouee !== t.fin) { finJouee = t.fin; jouer('fin-temps'); vibrer(200); }
@@ -2181,7 +2487,7 @@ body > .bandeau.visible{pointer-events:auto}
   function puces(ul, liste, depart) {
     ul.innerHTML = '';
     const MAX = 12;
-    liste.slice(0, MAX).forEach((x, i) => { const li = document.createElement('li'); li.style.setProperty('--i', depart + i); li.textContent = x.mot || x; if (x.par) { const sm = document.createElement('small'); sm.textContent = 'par ' + ((joueurDe(x.par) || {}).prenom || ''); li.append(document.createTextNode(' '), sm); } ul.append(li); });
+    liste.slice(0, MAX).forEach((x, i) => { const li = document.createElement('li'); li.style.setProperty('--i', depart + i); li.textContent = x.mot || x; if (x.par) { const sm = document.createElement('small'); sm.textContent = vue.local ? 'par l\'' + nomEquipe((joueurDe(x.par) || {}).equipe) : 'par ' + ((joueurDe(x.par) || {}).prenom || ''); li.append(document.createTextNode(' '), sm); } ul.append(li); });
     if (liste.length > MAX) { const li = document.createElement('li'); li.className = 'plus-autres'; li.textContent = '+ ' + (liste.length - MAX) + (liste.length - MAX > 1 ? ' autres' : ' autre'); ul.append(li); }
   }
   function rendreFinTour(nouvelle) {
@@ -2193,7 +2499,7 @@ body > .bandeau.visible{pointer-events:auto}
     texte('#titre-fin-tour', vue.restantes === 0 ? 'Paquet vide !' : 'Temps écoulé !');
     const pe = $('.barre [data-role="equipe-du-tour"]', s); texte(pe, nomEquipe(d.equipe)); couleurEquipe(pe, d.equipe);
     texte('[data-role="points-tour"]', '+' + d.trouvees.length, s);
-    texte('[data-role="nom-parleur"]', (joueurDe(d.parleur) || {}).prenom || '', s);
+    texte('[data-role="nom-parleur"]', (joueurDe(d.parleur) || {}).prenom || (vue.local ? 'L\'' + nomEquipe(d.equipe) : ''), s);
     texte('[data-role="nb-trouvees-texte"]', pluriel(d.trouvees.length, 'carte'), s);
     const gains = {}; d.buzzees.forEach(b => { const j = joueurDe(b.par); if (j && j.equipe) gains[j.equipe] = (gains[j.equipe] || 0) + 1; });
     const ulg = $('[data-role="gains-adverses"]', s); ulg.innerHTML = '';
@@ -2227,7 +2533,7 @@ body > .bandeau.visible{pointer-events:auto}
     if (vue.prochain) {
       const j = joueurDe(vue.prochain.parleur);
       pastille($('#prochain .pastille'), j);
-      texte('[data-role="prochain-parleur"]', j ? j.prenom : '', s);
+      texte('[data-role="prochain-parleur"]', j && j.prenom ? j.prenom : (vue.local ? 'Quelqu\'un' : ''), s);
       texte('[data-role="prochaine-equipe"]', nomEquipe(vue.prochain.equipe), s);
     }
     $('#prochain').hidden = dernier;
@@ -2279,12 +2585,22 @@ body > .bandeau.visible{pointer-events:auto}
     if (!v.moi) return;
     decalage = v.decalage || 0;
     $('#btn-entrer').disabled = false;
-    if (!prec && v.phase !== 'salle' && v.moi.equipe) {
+    if (!prec && !v.local && v.phase !== 'salle' && v.moi.equipe) {
       const toast = $('#toast-retard'); texte('[data-role="equipe-attribuee"]', nomEquipe(v.moi.equipe), toast);
       toast.classList.add('visible'); setTimeout(() => toast.classList.remove('visible'), 4000);
     }
     const nouvelle = !prec || prec.phase !== v.phase || (v.tour && prec.tour && prec.tour.debut !== v.tour.debut);
     if (v.phase !== 'tour') fermerVoile();
+    if (v.phase === 'tour' && nouvelle) voileN = null;   /* buzz.n repart de 1 à chaque tour */
+    if (v.local) {
+      switch (v.phase) {
+        case 'pret': if (nouvelle) localPasseFait = false; if (localPasseFait) { rendrePret(); montrer('pret'); } else { rendrePasse(); montrer('local-passe'); } break;
+        case 'tour': rendreTourLocal(nouvelle); suivreBuzz(); break;
+        case 'finTour': rendreFinTour(nouvelle); montrer('fin-tour'); break;
+        case 'fin': rendreFin(nouvelle); montrer('fin'); break;
+      }
+      return;
+    }
     switch (v.phase) {
       case 'salle': rendreSalle(); montrer('attente'); break;
       case 'pret': rendrePret(); montrer('pret'); break;
@@ -2294,7 +2610,181 @@ body > .bandeau.visible{pointer-events:auto}
     }
   }
 
+  /* ================= Mode « un seul téléphone » (option, jamais le défaut, jamais mémorisé) =================
+     Pas de réseau : l'état vit ici, on joue Logique directement. Le téléphone est toujours dans la main de
+     qui fait deviner ; une seule équipe surveille par tour (Logique.equipeQuiSurveille). Tous les sons ici. */
+  let localPasseFait = false, localDejaJouees = [];
+  const localConf = { nbEquipes: 2, nb: { e1: 2, e2: 2, e3: 2, e4: 2 }, prenoms: { e1: [], e2: [], e3: [], e4: [] } };
+  const MAX_LOCAL = window.Logique.MAX_JOUEURS;
+  function choisirMode(m) {
+    $('#mode-plusieurs').checked = m !== 'un'; $('#mode-un').checked = m === 'un';
+    document.body.classList.toggle('un-telephone', m === 'un');
+  }
+  $$('input[name="mode-jeu"]').forEach(r => r.addEventListener('change', () => choisirMode($('#mode-un').checked ? 'un' : 'plusieurs')));
+  $('#btn-local-commencer').addEventListener('click', () => { rendreLocalEquipes(); montrer('local-equipes'); });
+  $('#btn-local-retour').addEventListener('click', () => montrer('accueil'));
+  $('#local-equipes-moins').addEventListener('click', () => { localConf.nbEquipes = Math.max(2, localConf.nbEquipes - 1); rendreLocalEquipes(); });
+  $('#local-equipes-plus').addEventListener('click', () => { localConf.nbEquipes = Math.min(4, localConf.nbEquipes + 1); rendreLocalEquipes(); });
+
+  /* U1 : une équipe = le gabarit de Léa, cloné */
+  const gabaritEquipeLocale = $('#local-equipes .equipe-locale').cloneNode(true);
+  const gabaritPrenom = $('[data-role="prenoms"] li', gabaritEquipeLocale).cloneNode(true);
+  function rendreLocalEquipes(focus) {
+    const n = localConf.nbEquipes;
+    texte('#local-equipes-valeur', String(n));
+    $('#local-equipes-moins').disabled = n <= 2; $('#local-equipes-plus').disabled = n >= 4;
+    const box = $('#local-equipes'); box.innerHTML = '';
+    window.Logique.EQUIPES.slice(0, n).forEach(e => {
+      const k = localConf.nb[e.id];
+      const d = gabaritEquipeLocale.cloneNode(true);
+      d.dataset.equipe = e.id; couleurEquipe(d, e.id);
+      texte('[data-role="nom-equipe"]', e.nom, d); texte('[data-role="nb"]', pluriel(k, 'personne'), d);
+      const lib = $('.ligne-nb .lib-reglage', d), pas = $('.ligne-nb .pas', d);
+      lib.id = 'lib-local-nb-' + e.id; pas.setAttribute('aria-labelledby', lib.id);
+      const [moins, plus] = $$('button', pas);
+      moins.setAttribute('aria-label', 'Une personne de moins dans l\'' + e.nom); plus.setAttribute('aria-label', 'Une personne de plus dans l\'' + e.nom);
+      moins.disabled = k <= 2; plus.disabled = k >= 8;
+      moins.addEventListener('click', () => { localConf.nb[e.id] = Math.max(2, k - 1); rendreLocalEquipes(e.id + '-moins'); });
+      plus.addEventListener('click', () => { localConf.nb[e.id] = Math.min(8, k + 1); rendreLocalEquipes(e.id + '-plus'); });
+      moins.dataset.focus = e.id + '-moins'; plus.dataset.focus = e.id + '-plus';
+      texte('.valeur', String(k), pas);
+      const ul = $('[data-role="prenoms"]', d); ul.innerHTML = '';
+      for (let i = 0; i < k; i++) {
+        const li = gabaritPrenom.cloneNode(true), inp = $('input', li);
+        inp.value = localConf.prenoms[e.id][i] || '';
+        inp.setAttribute('aria-label', e.nom + ', prénom ' + (i + 1) + ' (facultatif)');
+        inp.addEventListener('input', () => { localConf.prenoms[e.id][i] = inp.value; });
+        ul.append(li);
+      }
+      box.append(d);
+    });
+    const total = window.Logique.EQUIPES.slice(0, n).reduce((s, e) => s + localConf.nb[e.id], 0);
+    const trop = total > MAX_LOCAL;
+    texte('#raison-local', trop ? total + ' personnes : ' + MAX_LOCAL + ' au plus.' : '');
+    $('#btn-local-lancer').disabled = trop;
+    if (focus) { const b = $('[data-focus="' + focus + '"]', box); if (b && !b.disabled) b.focus(); }
+  }
+  function valeurRadio(nom) { const r = $('input[name="' + nom + '"]:checked'); return r ? r.value : null; }
+  $('#btn-local-lancer').addEventListener('click', () => {
+    if ($('#btn-local-lancer').disabled) return;
+    fermerSession();
+    session = new SessionLocale({
+      nbEquipes: localConf.nbEquipes,
+      duree: Number(valeurRadio('local-duree')) || 60,
+      toursParJoueur: Number(valeurRadio('local-tours')) || 1,
+      difficulte: valeurRadio('local-difficulte') || 'toutes',
+      equipes: window.Logique.EQUIPES.slice(0, localConf.nbEquipes).map(e => ({ id: e.id, prenoms: Array.from({ length: localConf.nb[e.id] }, (_, i) => String(localConf.prenoms[e.id][i] || '').trim()) }))
+    });
+  });
+
+  /* La « session » locale : même interface que Reseau.Hote (agir, quitter), sans réseau */
+  function SessionLocale(conf) {
+    const L = window.Logique;
+    const etat = L.nouvelEtat();
+    etat.cartesJouees = localDejaJouees.slice();
+    conf.equipes.forEach(eq => eq.prenoms.forEach((p, i) => {
+      const r = L.ajouterJoueur(etat, 'local-' + eq.id + '-' + i, p || 'Personne');
+      if (r.ok && !p) r.joueur.prenom = '';
+    }));
+    L.regler(etat, { nbEquipes: conf.nbEquipes, duree: conf.duree, toursParJoueur: conf.toursParJoueur, difficulte: conf.difficulte, repartition: 'choix' });
+    conf.equipes.forEach(eq => eq.prenoms.forEach((p, i) => L.choisirEquipe(etat, 'local-' + eq.id + '-' + i, eq.id)));
+    const cleVue = () => etat.tour ? etat.tour.parleur : etat.joueurs[0].cle;
+    function diffuser() {
+      const v = L.vueDe(etat, cleVue(), Date.now());
+      v.moi = Object.assign({}, v.moi, { hote: true });
+      v.local = true; v.decalage = 0;
+      v.surveille = L.equipeQuiSurveille(etat);
+      afficher(v);
+    }
+    const minuteur = setInterval(() => { if (L.tic(etat, Date.now())) diffuser(); }, 200);
+    this.agir = m => {
+      const t = Date.now(), p = etat.tour && etat.tour.parleur;
+      switch (m.a) {
+        case 'go': L.go(etat, p, t); break;
+        case 'trouve': L.trouve(etat, p, t); break;
+        case 'passer': L.passer(etat, p, t); break;
+        case 'buzzer': {
+          const sv = L.equipeQuiSurveille(etat);
+          const qui = etat.joueurs.find(j => j.equipe === sv && j.connecte);
+          if (!qui || !L.buzzer(etat, qui.cle, t).ok) return;   /* refusé : rien (jamais buzz-refuse ici) */
+          break;
+        }
+        case 'suite': L.suite(etat); break;
+        case 'rejouer': localDejaJouees = etat.cartesJouees.slice(); fermerSession(); rendreLocalEquipes(); montrer('local-equipes'); return;
+        default: return;
+      }
+      diffuser();
+    };
+    this.quitter = () => { clearInterval(minuteur); };
+    const r = L.lancer(etat, window.CARTES);
+    if (r.ok) diffuser();
+  }
+
+  /* U2 : passez le téléphone (aucune carte affichée) */
+  function rendrePasse() {
+    const s = $('#ecran-local-passe'), t = vue.tour, j = joueurDe(t.parleur) || {};
+    s.classList.remove('arret-demande');
+    texte('[data-role="ronde"]', ronde(), s);
+    $$('[data-role="equipe-du-tour"]', s).forEach(el => { el.textContent = nomEquipe(t.equipe); couleurEquipe(el, t.equipe); });
+    s.classList.toggle('sans-prenom', !j.prenom);
+    pastille($('[data-role="pastille-parleur"]', s), j);
+    texte('[data-role="nom-parleur"]', j.prenom || '', s);
+    textes('[data-role="nom-equipe"]', nomEquipe(t.equipe), s);
+    textes('[data-role="equipe-surveille"]', nomEquipe(vue.surveille), s);
+  }
+  $('#btn-cest-moi').addEventListener('click', () => {
+    if (!vue || !vue.local || vue.phase !== 'pret') return;
+    localPasseFait = true; rendrePret(); montrer('pret');
+  });
+  /* Arrêter la partie (U2) : confirmation dans l'écran, puis accueil en mode Plusieurs, état local vidé */
+  const ecranPasse = $('#ecran-local-passe');
+  $('.btn-arreter', ecranPasse).addEventListener('click', () => ecranPasse.classList.add('arret-demande'));
+  $('.btn-arret-non', ecranPasse).addEventListener('click', () => ecranPasse.classList.remove('arret-demande'));
+  $('.btn-arret-oui', ecranPasse).addEventListener('click', () => {
+    ecranPasse.classList.remove('arret-demande');
+    localPasseFait = false; localDejaJouees = []; carteAffichee = null; serie = 0; voileN = null;
+    quitter();   /* ferme la session locale (chrono arrêté), retire un-telephone, accueil */
+  });
+
+  /* U3 : le tour, buzzer en haut pour l'équipe qui surveille */
+  const buzzLocal = $('#btn-buzz-local');
+  function rendreTourLocal(nouvelle) {
+    const s = $('#ecran-local-tour'), t = vue.tour;
+    $$('[data-role="equipe-du-tour"]', s).forEach(el => { el.textContent = nomEquipe(t.equipe); couleurEquipe(el, t.equipe); });
+    textes('[data-role="equipe-surveille"]', nomEquipe(vue.surveille), s);
+    [['nb-trouvees', t.nbTrouvees], ['nb-buzzees', t.nbBuzzees]].forEach(([r, n]) => $$('[data-role="' + r + '"]', s).forEach(el => { if (el.textContent !== String(n)) { el.textContent = String(n); if (!nouvelle) rejoue(el, 'pop'); } }));
+    const enBuzz = !!t.buzz && Date.now() < t.buzz.jusque;
+    s.classList.toggle('buzz-en-cours', enBuzz);
+    if (nouvelle) { carteAffichee = null; serie = 0; }
+    s.classList.toggle('gaucher', gaucher);
+    const derniere = vue.restantes <= 1;
+    s.classList.toggle('derniere-carte', derniere);
+    $('#btn-passer-local').disabled = enBuzz || derniere; $('#btn-trouve-local').disabled = enBuzz;
+    buzzLocal.disabled = enBuzz || !t.carte;
+    if (t.carte) poserCarte($('#carte-local'), t.carte, true);
+    montrer('local-tour');
+  }
+  $('#btn-trouve-local').addEventListener('click', () => {
+    if (!vue || !vue.local || vue.phase !== 'tour' || $('#btn-trouve-local').disabled) return;
+    serie++; jouer(serie <= 1 ? 'trouve' : 'trouve-' + Math.min(4, serie)); vibrer(30);
+    sortie('sort-trouve', 'carte-local'); agir({ a: 'trouve' });
+  });
+  $('#btn-passer-local').addEventListener('click', () => {
+    if (!vue || !vue.local || vue.phase !== 'tour' || $('#btn-passer-local').disabled) return;
+    serie = 0; jouer('passer'); vibrer([15, 40, 15]);
+    sortie('sort-passe', 'carte-local'); agir({ a: 'passer' });
+  });
+  /* Au pointerdown, sans confirmation : le chrono tourne */
+  function buzzerLocal() {
+    if (!vue || !vue.local || vue.phase !== 'tour' || buzzLocal.disabled) return;
+    rejoue(buzzLocal, 'enfonce'); setTimeout(() => buzzLocal.classList.remove('enfonce'), 160);
+    agir({ a: 'buzzer' });
+  }
+  buzzLocal.addEventListener('pointerdown', buzzerLocal);
+  buzzLocal.addEventListener('keydown', e => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); buzzerLocal(); } });
+
   /* ---------------- Démarrage ---------------- */
+  choisirMode('plusieurs');
   function reprendre(s) { if (s.role === 'hote') demarrerHote(s.prenom, s); else demarrerInvite(s.prenom, s.code, s.cle); }
   ['#bandeau-connexion', '#toast-retard', '#voile-buzz'].forEach(sel => { const el = $(sel); if (el) document.body.append(el); });
   $$('.ecran').forEach(s => { s.hidden = true; });
